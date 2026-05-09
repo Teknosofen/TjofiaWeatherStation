@@ -1,6 +1,6 @@
 #pragma once
 #include <Arduino.h>
-#include <Arduino_GFX_Library.h>
+#include <DIYables_TFT_Round.h>
 
 class DisplayManager {
 public:
@@ -24,7 +24,7 @@ public:
     void showAPMode(const String &ssid);
 
 private:
-    Arduino_GFX *_gfx = nullptr;
+    DIYables_TFT_GC9A01_Round _tft;
 
     float _lastTemp  = -999;
     int   _lastH = -1, _lastM = -1, _lastS = -1;

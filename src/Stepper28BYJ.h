@@ -8,8 +8,8 @@ public:
         for (int p : pins) pinMode(p, OUTPUT);
     }
 
-    // direction: +1 = CW, -1 = CCW; delayMs >= 2
-    void rotate(int steps, int dir, int delayMs = 3) {
+    // direction: +1 = CW, -1 = CCW; delayMs >= 2, reliable from 5 ms
+    void rotate(int steps, int dir, int delayMs = 5) {
         for (int i = 0; i < steps; i++) {
             _step = (_step + dir + 8) % 8;
             apply();

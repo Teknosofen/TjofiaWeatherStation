@@ -1,12 +1,13 @@
 #pragma once
 
-// ── Display (GC9A01 240×240 circular, VSPI) ──────────────────────────────────
-// These pins avoid all motor pins (14,27,32,33 and 25,26,16,17)
-#define TFT_SCLK   5
-#define TFT_MOSI  18
-#define TFT_CS    23
-#define TFT_DC    13
-#define TFT_RST    4
+// ── Display (GC9A01 240×240 circular, SPI) ───────────────────────────────────
+// HUZZAH32 board SPI bus: SCK=GPIO5 (pin "SCK"), MOSI=GPIO18 (pin "MOSI")
+// TFT_SCLK / TFT_MOSI are for documentation — the driver uses SPI.begin() internally.
+#define TFT_SCLK   5   // board pin "SCK"  — wire display CLK  here
+#define TFT_MOSI  18   // board pin "MOSI" — wire display MOSI here
+#define TFT_CS    15   // board pin "D15"  — wire display CS   here
+#define TFT_DC    13   // board pin "D13"  — wire display DC   here
+#define TFT_RST    4   // board pin "A5"   — wire display RST  here
 #define TFT_BL    -1   // set to GPIO pin if backlight is PWM-controlled
 
 // ── Motor 1  (Wind-speed gauge) ───────────────────────────────────────────────
@@ -21,7 +22,7 @@
 #define MOTOR2_P3  16
 #define MOTOR2_P4  17
 
-// 28BYJ-48 in half-step mode: 64 * 8 * (64/1) gear = 4096 steps / rev
+// 28BYJ-48 half-step: 64 steps/motor-rev × 64 internal gear = 4096 steps/rev on output shaft
 #define STEPS_PER_REV  4096
 
 // ── WiFi config portal ────────────────────────────────────────────────────────
