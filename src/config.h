@@ -35,8 +35,10 @@
 #define NTP_SERVER2  "time.nist.gov"
 
 // ── External APIs ─────────────────────────────────────────────────────────────
-// IP geolocation — free, no key
-#define GEO_URL  "http://ip-api.com/json"
+// IP geolocation — free, no key.
+// offset (UTC DST offset in seconds) is not in the default field set,
+// so request the exact fields we need.
+#define GEO_URL  "http://ip-api.com/json?fields=status,city,country,lat,lon,timezone,offset"
 // OpenWeatherMap current weather (metric units)
 #define OWM_URL  "https://api.openweathermap.org/data/2.5/weather"
 
