@@ -317,7 +317,22 @@ static bool startWifi() {
 // ── NTP / time helpers ────────────────────────────────────────────────────────
 
 static bool syncTime(int utcOffsetSec) {
-    configTime(utcOffsetSec, 0, NTP_SERVER1, NTP_SERVER2);
+    // configTime() on ESP32 generates an invalid POSIX tz string when
+    // daylightOffset_sec = 0 (e.g. "UTC-1UTC-11"), which the C library
+    // rejects and falls back to UTC.  Build the string ourselves instead.
+    //
+    // POSIX sign convention is inverted vs common usage:
+    //   "UTC-1" = one hour east of UTC  (= UTC+1)
+    //   "UTC+5" = five hours west of UTC (= UTC-5)
+    int h = utcOffsetSec / 3600;
+    int m = abs((utcOffsetSec % 3600) / 60);
+    char tzPosix[20];
+    if (m == 0)
+        snprintf(tzPosix, sizeof(tzPosix), "UTC%+d",       -h);
+    else
+        snprintf(tzPosix, sizeof(tzPosix), "UTC%+d:%02d",  -h, m);
+    Serial.printf("NTP sync: offset %+d s → POSIX \"%s\"\n", utcOffsetSec, tzPosix);
+    configTzTime(tzPosix, NTP_SERVER1, NTP_SERVER2);
     time_t now = 0;
     for (int i = 0; i < 20 && now < 100000; i++) {
         delay(500);
@@ -408,9 +423,9 @@ void loop() {
             prefs.putString(NVS_TZ, geoInfo.timezone);
             prefs.putInt(NVS_UTC_OFF, geoInfo.utcOffset);
             prefs.end();
-            Serial.printf("Location: %s, %s (%.4f, %.4f)\n",
+            Serial.printf("Location: %s, %s (%.4f, %.4f)  tz offset %+d s\n",
                           geoInfo.city.c_str(), geoInfo.country.c_str(),
-                          geoInfo.lat, geoInfo.lon);
+                          geoInfo.lat, geoInfo.lon, geoInfo.utcOffset);
         } else if (!geoInfo.valid) {
             Serial.println("Geolocation failed — using UTC");
             geoInfo.utcOffset = 0;
