@@ -1,0 +1,5 @@
+{
+  "name": "DIYables TFT Round",
+  "version": "1.0.1-patched",
+  "description": "DIYables GC9A01 round TFT driver — patched: 80 MHz SPI, bulk fillScreen"
+}
