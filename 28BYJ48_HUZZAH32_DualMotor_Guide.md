@@ -246,21 +246,55 @@ or `http://192.168.4.1/` without reflashing.
 
 ### 7.3 Geolocation
 
-The firmware determines latitude/longitude automatically via **ip-api.com**
-(no key required). The result is cached in NVS so subsequent boots use the
-cached values even if the service is temporarily unreachable.
+**Automatic (IP-based)**
 
-The request includes an explicit `fields` parameter:
+On every boot the firmware calls **ip-api.com** (no key required) to determine
+latitude, longitude, timezone, and UTC offset from the device's public IP
+address. The request uses an explicit `fields` parameter so the UTC offset is
+included (it is not in the default response):
 
 ```
 http://ip-api.com/json?fields=status,city,country,lat,lon,timezone,offset
 ```
 
-The `offset` field (UTC DST offset in **seconds**, e.g. `7200` for UTC+2)
-is not included in the ip-api.com default response — it must be explicitly
-requested. Latitude, longitude, timezone name, and the UTC offset are all
-persisted in NVS (keys `lat`, `lon`, `timezone`, `utc_off`) so the correct
-local time is available on reboot even when the geolocation fetch fails.
+IP geolocation resolves to the ISP's gateway or exchange, which can be tens of
+kilometres from the actual device. For weather data this is usually acceptable,
+but if the nearest OWM station is wrong, use the manual pin below.
+
+All values are cached in NVS (`lat`, `lon`, `timezone`, `utc_off`) so they
+survive reboots and temporary network outages.
+
+**Manual location pin**
+
+A map-based location picker is available at `/location`
+(`http://TjofiaWX.local/location` or a button on the main config page).
+
+> **Requires internet access on the browser** — the ESP32 serves only a small
+> HTML skeleton; the Leaflet.js library and OpenStreetMap tiles are fetched by
+> the browser from public CDNs. Use the `TjofiaWX.local` address on the home
+> WiFi network, not the device AP.
+
+| Step | Action |
+|---|---|
+| 1 | Open `http://TjofiaWX.local/location` |
+| 2 | The map opens centred on the current (IP-geolocated) position with a draggable pin |
+| 3 | Click anywhere on the map to move the pin, or drag the marker to fine-tune |
+| 4 | Tap **Use my GPS** to jump the map and pin to the browser's GPS position (works best on a phone) |
+| 5 | Press **Save & pin** — lat/lon are written to NVS and a `loc_pinned` flag is set |
+
+Once pinned:
+- The `loc_pinned` flag is shown with a green banner on the location page.
+- ip-api.com is still called on each boot **for the UTC offset only** — its
+  lat/lon is silently ignored. Local time therefore remains correct.
+- The serial monitor prints `[pinned]` next to the coordinates to confirm.
+
+```
+Location: [pinned] (60.1234, 16.5678)  tz offset +7200 s (UTC offset from ip-api)
+```
+
+To revert to automatic IP geolocation, press **Clear pin** on the location
+page. NVS keys `lat` and `lon` are not deleted — they are simply unprotected
+again and will be overwritten by the next successful ip-api fetch.
 
 ### 7.4 NTP time sync
 
