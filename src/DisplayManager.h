@@ -39,6 +39,7 @@ private:
     static constexpr int CY = 120;
     static constexpr int R  = 112;
 
+    void drawBezel();
     void drawFace();
     void drawHand(float angleDeg, int length, int thickness, uint16_t colour);
     void eraseHand(float angleDeg, int length, int thickness);

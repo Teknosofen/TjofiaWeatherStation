@@ -43,14 +43,20 @@ void DisplayManager::eraseHand(float angleDeg, int length, int thickness) {
     drawHand(angleDeg, length, thickness, COL_BG);
 }
 
-void DisplayManager::drawFace() {
-    // Six-pixel bevelled ring: very dark outer → white innermost
-    _tft.drawCircle(CX, CY, R + 3, 0x2104);   // very dark grey (outermost)
-    _tft.drawCircle(CX, CY, R + 2, 0x4208);   // dark grey
-    _tft.drawCircle(CX, CY, R + 1, 0x630C);   // medium-dark grey
-    _tft.drawCircle(CX, CY, R,     0x8410);   // medium grey
+void DisplayManager::drawBezel() {
+    // Eight-pixel bevelled ring: near-black outer → white innermost (R+5 .. R-2)
+    _tft.drawCircle(CX, CY, R + 5, 0x0841);   // almost black
+    _tft.drawCircle(CX, CY, R + 4, 0x1082);   // very dark grey
+    _tft.drawCircle(CX, CY, R + 3, 0x2104);   // dark grey
+    _tft.drawCircle(CX, CY, R + 2, 0x4208);   // medium-dark grey
+    _tft.drawCircle(CX, CY, R + 1, 0x630C);   // medium grey
+    _tft.drawCircle(CX, CY, R,     0x8410);   // medium-light grey
     _tft.drawCircle(CX, CY, R - 1, 0xC618);   // light grey
     _tft.drawCircle(CX, CY, R - 2, COL_FACE); // white (innermost)
+}
+
+void DisplayManager::drawFace() {
+    drawBezel();
 
     for (int i = 0; i < 60; i++) {
         float rad   = (i * 6 - 90) * (float)M_PI / 180.0f;
@@ -108,8 +114,7 @@ void DisplayManager::showSplash(const String &version, const String &buildDate) 
     _lastS = -1;
     _dispTempBuf[0] = '\0'; _dispTempX = -1;
     _tft.fillScreen(COL_BG);
-    _tft.drawCircle(CX, CY, R,     COL_FACE);
-    _tft.drawCircle(CX, CY, R - 1, COL_FACE);
+    drawBezel();
 
     _tft.setFont(&FreeSans9pt7b);
     _tft.setTextSize(1);
@@ -188,8 +193,7 @@ void DisplayManager::showStatus(const String &line1, const String &line2) {
     _faceDrawn = false;
     _dispTempBuf[0] = '\0'; _dispTempX = -1;
     _tft.fillScreen(COL_BG);
-    _tft.drawCircle(CX, CY, R,     COL_FACE);
-    _tft.drawCircle(CX, CY, R - 1, COL_FACE);
+    drawBezel();
 
     _tft.setFont(&FreeSans9pt7b);
     _tft.setTextColor(COL_FACE);
@@ -213,7 +217,7 @@ void DisplayManager::showError(const String &msg) {
     _faceDrawn = false;
     _dispTempBuf[0] = '\0'; _dispTempX = -1;
     _tft.fillScreen(COL_BG);
-    _tft.drawCircle(CX, CY, R, COL_ERROR);
+    drawBezel();
 
     _tft.setFont(&FreeSans9pt7b);
     _tft.setTextColor(COL_ERROR);
@@ -234,7 +238,7 @@ void DisplayManager::showAPMode(const String &ssid) {
     _faceDrawn = false;
     _dispTempBuf[0] = '\0'; _dispTempX = -1;
     _tft.fillScreen(COL_BG);
-    _tft.drawCircle(CX, CY, R, 0x07FF);
+    drawBezel();
 
     _tft.setFont(&FreeSans9pt7b);
 
