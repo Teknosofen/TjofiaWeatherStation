@@ -31,6 +31,7 @@ private:
 
     float _lastTemp  = -999;
     int   _lastH = -1, _lastM = -1, _lastS = -1;
+    bool  _faceDrawn = false;
 
     static constexpr int CX = 120;
     static constexpr int CY = 120;

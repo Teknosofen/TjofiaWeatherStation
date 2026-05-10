@@ -81,6 +81,8 @@ void DisplayManager::drawCentreText(float tempC) {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 void DisplayManager::showSplash(const String &version, const String &buildDate) {
+    _faceDrawn = false;
+    _lastS = -1;
     _tft.fillScreen(COL_BG);
     _tft.drawCircle(CX, CY, R,     COL_FACE);
     _tft.drawCircle(CX, CY, R - 1, COL_FACE);
@@ -102,14 +104,18 @@ void DisplayManager::showSplash(const String &version, const String &buildDate) 
 }
 
 void DisplayManager::drawClock(int hour, int minute, int second) {
-    static bool faceDrawn = false;
-    if (!faceDrawn) { drawFace(); faceDrawn = true; }
+    if (!_faceDrawn) { drawFace(); _faceDrawn = true; }
 
     if (_lastS >= 0) {
-        eraseHand(_lastS * 6.0f,                          95, 1);
-        eraseHand(_lastM * 6.0f + _lastS * 0.1f,          80, 3);
-        eraseHand((_lastH % 12) * 30.0f + _lastM * 0.5f,  55, 5);
-        drawFace();
+        float oldSec  = _lastS * 6.0f;
+        float oldMin  = _lastM * 6.0f + _lastS * 0.1f;
+        float oldHour = (_lastH % 12) * 30.0f + _lastM * 0.5f;
+
+        eraseHand(oldSec,          95, 1);
+        eraseHand(oldSec + 180.0f, 20, 1);  // counter-balance tail
+        eraseHand(oldMin,          80, 3);
+        eraseHand(oldHour,         55, 5);
+        // Tick marks (R 102–112) are never reached by any hand — no face redraw needed.
     }
 
     float secAngle  = second * 6.0f;
@@ -120,7 +126,7 @@ void DisplayManager::drawClock(int hour, int minute, int second) {
     drawHand(minAngle,  80, 3, COL_FACE);
     drawHand(secAngle,  95, 1, COL_SEC);
 
-    float tailRad = (secAngle - 90.0f + 180.0f) * (float)M_PI / 180.0f;
+    float tailRad = (secAngle + 90.0f) * (float)M_PI / 180.0f;
     _tft.drawLine(CX, CY,
                   CX + (int)(20 * cosf(tailRad)),
                   CY + (int)(20 * sinf(tailRad)),
@@ -139,6 +145,7 @@ void DisplayManager::setTemperature(float tempC) {
 }
 
 void DisplayManager::showStatus(const String &line1, const String &line2) {
+    _faceDrawn = false;
     _tft.fillScreen(COL_BG);
     _tft.drawCircle(CX, CY, R,     COL_FACE);
     _tft.drawCircle(CX, CY, R - 1, COL_FACE);
@@ -162,6 +169,7 @@ void DisplayManager::showStatus(const String &line1, const String &line2) {
 }
 
 void DisplayManager::showError(const String &msg) {
+    _faceDrawn = false;
     _tft.fillScreen(COL_BG);
     _tft.drawCircle(CX, CY, R, COL_ERROR);
 
@@ -181,6 +189,7 @@ void DisplayManager::showError(const String &msg) {
 }
 
 void DisplayManager::showAPMode(const String &ssid) {
+    _faceDrawn = false;
     _tft.fillScreen(COL_BG);
     _tft.drawCircle(CX, CY, R, 0x07FF);
 
