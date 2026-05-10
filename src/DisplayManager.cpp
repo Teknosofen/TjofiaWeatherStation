@@ -44,18 +44,28 @@ void DisplayManager::eraseHand(float angleDeg, int length, int thickness) {
 }
 
 void DisplayManager::drawFace() {
-    _tft.drawCircle(CX, CY, R,     COL_FACE);
-    _tft.drawCircle(CX, CY, R - 1, COL_FACE);
+    // Three-pixel bevelled ring: dark outer → mid-grey → white innermost
+    _tft.drawCircle(CX, CY, R,     0x4208);   // dark grey
+    _tft.drawCircle(CX, CY, R - 1, 0x8410);   // mid grey
+    _tft.drawCircle(CX, CY, R - 2, COL_FACE); // white
 
     for (int i = 0; i < 60; i++) {
-        float rad = (i * 6 - 90) * (float)M_PI / 180.0f;
-        int isHour = (i % 5 == 0);
-        int r0 = isHour ? R - 10 : R - 5;
-        int x1 = CX + (int)(R  * cosf(rad));
-        int y1 = CY + (int)(R  * sinf(rad));
-        int x2 = CX + (int)(r0 * cosf(rad));
-        int y2 = CY + (int)(r0 * sinf(rad));
-        _tft.drawLine(x1, y1, x2, y2, isHour ? COL_FACE : (uint16_t)0x7BEF);
+        float rad   = (i * 6 - 90) * (float)M_PI / 180.0f;
+        bool isHour = (i % 5 == 0);
+        int  r0     = isHour ? R - 10 : R - 5;
+        int  x1 = CX + (int)(R  * cosf(rad));
+        int  y1 = CY + (int)(R  * sinf(rad));
+        int  x2 = CX + (int)(r0 * cosf(rad));
+        int  y2 = CY + (int)(r0 * sinf(rad));
+
+        // Perpendicular unit offset for tick width
+        int ox = (int)roundf(-sinf(rad));
+        int oy = (int)roundf( cosf(rad));
+
+        // All ticks white: minute = 2 px wide, hour = 3 px wide
+        _tft.drawLine(x1,      y1,      x2,      y2,      COL_FACE);
+        _tft.drawLine(x1 + ox, y1 + oy, x2 + ox, y2 + oy, COL_FACE);
+        if (isHour) _tft.drawLine(x1 - ox, y1 - oy, x2 - ox, y2 - oy, COL_FACE);
     }
     _tft.fillCircle(CX, CY, 3, COL_ACCENT);
 }
@@ -117,25 +127,41 @@ void DisplayManager::showSplash(const String &version, const String &buildDate) 
 void DisplayManager::drawClock(int hour, int minute, int second) {
     if (!_faceDrawn) { drawFace(); _faceDrawn = true; }
 
+    float secAngle  = second * 6.0f;
+    float minAngle  = minute * 6.0f + second * 0.1f;
+    float hourAngle = (hour % 12) * 30.0f + minute * 0.5f;
+
+    // Pixel endpoint of a hand — used to skip redraws when nothing moved.
+    auto epX = [](float a, int r) {
+        return CX + (int)(r * cosf((a - 90.0f) * (float)M_PI / 180.0f));
+    };
+    auto epY = [](float a, int r) {
+        return CY + (int)(r * sinf((a - 90.0f) * (float)M_PI / 180.0f));
+    };
+
+    bool redrawHour = true, redrawMin = true;
+
     if (_lastS >= 0) {
         float oldSec  = _lastS * 6.0f;
         float oldMin  = _lastM * 6.0f + _lastS * 0.1f;
         float oldHour = (_lastH % 12) * 30.0f + _lastM * 0.5f;
 
+        // Minute hand: 0.1°/s → < 1 px/s at length 80; skip when pixel unchanged.
+        // Hour hand: 0.5°/min → even slower; almost never moves between seconds.
+        redrawMin  = (epX(oldMin,  80) != epX(minAngle,  80) ||
+                      epY(oldMin,  80) != epY(minAngle,  80));
+        redrawHour = (epX(oldHour, 55) != epX(hourAngle, 55) ||
+                      epY(oldHour, 55) != epY(hourAngle, 55));
+
         eraseHand(oldSec,          95, 1);
-        eraseHand(oldSec + 180.0f, 20, 1);  // counter-balance tail
-        eraseHand(oldMin,          80, 3);
-        eraseHand(oldHour,         55, 5);
-        // Tick marks (R 102–112) are never reached by any hand — no face redraw needed.
+        eraseHand(oldSec + 180.0f, 20, 1);
+        if (redrawMin)  eraseHand(oldMin,  80, 5);
+        if (redrawHour) eraseHand(oldHour, 55, 7);
     }
 
-    float secAngle  = second * 6.0f;
-    float minAngle  = minute * 6.0f + second * 0.1f;
-    float hourAngle = (hour % 12) * 30.0f + minute * 0.5f;
-
-    drawHand(hourAngle, 55, 5, COL_FACE);
-    drawHand(minAngle,  80, 3, COL_FACE);
-    drawHand(secAngle,  95, 1, COL_SEC);
+    if (redrawHour) drawHand(hourAngle, 55, 7, COL_FACE);
+    if (redrawMin)  drawHand(minAngle,  80, 5, COL_FACE);
+    drawHand(secAngle, 95, 1, COL_SEC);
 
     float tailRad = (secAngle + 90.0f) * (float)M_PI / 180.0f;
     _tft.drawLine(CX, CY,
