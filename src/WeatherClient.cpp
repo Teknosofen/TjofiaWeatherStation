@@ -27,7 +27,7 @@ bool WeatherClient::fetchLocation(GeoInfo &out) {
     out.city      = doc["city"].as<String>();
     out.country   = doc["country"].as<String>();
     out.timezone  = doc["timezone"].as<String>();
-    out.utcOffset = doc["offset"].as<int>() * 3600; // ip-api gives hours
+    out.utcOffset = doc["offset"].as<int>(); // ip-api offset is already in seconds
     out.valid     = true;
     return true;
 }

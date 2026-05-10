@@ -390,11 +390,13 @@ void loop() {
         float cachedLat = prefs.getFloat(NVS_LAT, 0);
         float cachedLon = prefs.getFloat(NVS_LON, 0);
         String cachedTz = prefs.getString(NVS_TZ, "");
+        int cachedOff   = prefs.getInt(NVS_UTC_OFF, 0);
         prefs.end();
 
         if (cachedLat != 0 || cachedLon != 0) {
             geoInfo.lat = cachedLat; geoInfo.lon = cachedLon;
-            geoInfo.timezone = cachedTz; geoInfo.valid = true;
+            geoInfo.timezone = cachedTz; geoInfo.utcOffset = cachedOff;
+            geoInfo.valid = true;
         }
 
         GeoInfo fresh;
@@ -404,6 +406,7 @@ void loop() {
             prefs.putFloat(NVS_LAT, geoInfo.lat);
             prefs.putFloat(NVS_LON, geoInfo.lon);
             prefs.putString(NVS_TZ, geoInfo.timezone);
+            prefs.putInt(NVS_UTC_OFF, geoInfo.utcOffset);
             prefs.end();
             Serial.printf("Location: %s, %s (%.4f, %.4f)\n",
                           geoInfo.city.c_str(), geoInfo.country.c_str(),
