@@ -247,14 +247,47 @@ or `http://192.168.4.1/` without reflashing.
 ### 7.3 Geolocation
 
 The firmware determines latitude/longitude automatically via **ip-api.com**
-(no key required). The result is cached in flash (NVS) so subsequent boots
-are instant even if the service is temporarily unreachable.
+(no key required). The result is cached in NVS so subsequent boots use the
+cached values even if the service is temporarily unreachable.
+
+The request includes an explicit `fields` parameter:
+
+```
+http://ip-api.com/json?fields=status,city,country,lat,lon,timezone,offset
+```
+
+The `offset` field (UTC DST offset in **seconds**, e.g. `7200` for UTC+2)
+is not included in the ip-api.com default response — it must be explicitly
+requested. Latitude, longitude, timezone name, and the UTC offset are all
+persisted in NVS (keys `lat`, `lon`, `timezone`, `utc_off`) so the correct
+local time is available on reboot even when the geolocation fetch fails.
 
 ### 7.4 NTP time sync
 
 Local time is obtained from `pool.ntp.org` / `time.nist.gov` after WiFi
-connects. The UTC offset is derived from the ip-api geolocation response,
-so no manual timezone configuration is needed.
+connects. The UTC offset comes from the ip-api geolocation response — no
+manual timezone configuration is needed.
+
+The ESP32 Arduino `configTime()` function builds an invalid POSIX timezone
+string when the DST offset is zero (e.g. `"UTC-1UTC-11"`), which the C
+runtime rejects and silently treats as UTC. The firmware avoids this by
+calling `configTzTime()` directly with a manually built POSIX string:
+
+| ip-api `offset` | POSIX string | Meaning |
+|---|---|---|
+| `+3600` (UTC+1) | `"UTC-1"` | 1 hour east of UTC |
+| `+7200` (UTC+2) | `"UTC-2"` | 2 hours east of UTC |
+| `-18000` (UTC−5) | `"UTC+5"` | 5 hours west of UTC |
+
+Note the inverted sign — this is the POSIX timezone convention.
+Half-hour and quarter-hour offsets (e.g. `+19800` for UTC+5:30) are
+handled correctly. The serial monitor prints the offset and the resulting
+POSIX string on every boot for easy verification:
+
+```
+Location: Råby, Sweden (60.1000, 16.3667)  tz offset +7200 s
+NTP sync: offset +7200 s → POSIX "UTC-2"
+```
 
 ---
 
@@ -373,6 +406,67 @@ the gauges to the last received weather values.
 
 Live weather updates are suppressed while calibration mode is active so the gauges
 do not move unexpectedly during adjustment.
+
+### 9.4 Display rendering
+
+**Erase-by-overwrite**
+
+All moving elements (clock hands, temperature text) are erased by redrawing
+them in the background colour (`COL_BG = 0x0000`) rather than by clearing
+a rectangle with `fillRect()`. This avoids erasing neighbouring pixels and
+eliminates the brief blank flash that `fillRect()` causes on the black display.
+
+- **Clock hands** — each hand's previous pixel path is redrawn in `COL_BG`
+  before the new position is drawn in its hand colour.
+- **Second-hand tail** — the 20-pixel counter-balance stub is explicitly
+  erased (it was previously leaked between frames because it lies outside the
+  main-hand sweep).
+- **Temperature text** — the previous formatted string is reprinted in `COL_BG`
+  at its stored cursor position, then the new string is drawn in `COL_ACCENT`.
+  If the formatted value is unchanged the function returns immediately with zero
+  SPI traffic (~59 of every 60 ticks).
+
+**Skipping unchanged hands**
+
+The minute hand moves < 0.14 px/s at its 80-pixel length; the hour hand even
+less. Both are compared pixel-endpoint before and after each tick — the
+erase-and-redraw is skipped entirely when the integer endpoint has not moved.
+This eliminates the sub-second hand flicker visible in earlier firmware.
+
+**Bevelled bezel ring**
+
+The clock face bezel is an 8-pixel wide ring drawn as 8 concentric circles
+from `R+5` (almost black `0x0841`) to `R−2` (white `COL_FACE`), giving a
+dark-to-bright gradient. The same `drawBezel()` helper is called by every
+full-screen function (`showSplash`, `showStatus`, `showError`, `showAPMode`,
+`drawFace`) so the look is consistent across all screens.
+
+| Ring radius | RGB565 | Appearance |
+|---|---|---|
+| R+5 | `0x0841` | almost black (outermost) |
+| R+4 | `0x1082` | very dark grey |
+| R+3 | `0x2104` | dark grey |
+| R+2 | `0x4208` | medium-dark grey |
+| R+1 | `0x630C` | medium grey |
+| R   | `0x8410` | medium-light grey |
+| R−1 | `0xC618` | light grey |
+| R−2 | `0xFFFF` | white (innermost) |
+
+`R = 112`. `R+5 = 117` — safely within the GC9A01's 120 px circular clip.
+
+**Tick marks and hand thicknesses**
+
+| Element | Previous | Current |
+|---|---|---|
+| Minute tick | 1 px, grey (`0x7BEF`) | 2 px, white |
+| Hour tick | 1 px, white | 3 px, white |
+| Minute hand | 3 px wide | 5 px wide |
+| Hour hand | 5 px wide | 7 px wide |
+| Second hand | 1 px | 1 px (unchanged) |
+
+Tick width is achieved by drawing an extra parallel line offset by one pixel
+perpendicular to the radial direction. Hour ticks get an extra line on each
+side (3 total); minute ticks get one additional line (2 total).
 
 ---
 
