@@ -1,6 +1,7 @@
 #include "WeatherClient.h"
 #include "config.h"
 #include <HTTPClient.h>
+#include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 

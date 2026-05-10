@@ -14,6 +14,9 @@ public:
     // Small temperature text drawn in the clock centre.
     void setTemperature(float tempC);
 
+    // Boot splash — branding, version, build date.
+    void showSplash(const String &version, const String &buildDate);
+
     // Full-screen status during boot / transitions.
     void showStatus(const String &line1, const String &line2 = "");
 

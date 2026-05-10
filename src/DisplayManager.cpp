@@ -80,6 +80,27 @@ void DisplayManager::drawCentreText(float tempC) {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+void DisplayManager::showSplash(const String &version, const String &buildDate) {
+    _tft.fillScreen(COL_BG);
+    _tft.drawCircle(CX, CY, R,     COL_FACE);
+    _tft.drawCircle(CX, CY, R - 1, COL_FACE);
+
+    _tft.setFont(&FreeSans9pt7b);
+    _tft.setTextSize(1);
+
+    auto centre = [&](const char *s, int y, uint16_t col) {
+        int16_t x1, y1; uint16_t tw, th;
+        _tft.getTextBounds(s, 0, 0, &x1, &y1, &tw, &th);
+        _tft.setTextColor(col);
+        _tft.setCursor(CX - tw / 2, y);
+        _tft.print(s);
+    };
+
+    centre("Teknosofen", 110, COL_FACE);
+    centre(version.c_str(),  150, COL_FACE);
+    centre(buildDate.c_str(), 170, 0x7BEF);       // dim white for build date
+}
+
 void DisplayManager::drawClock(int hour, int minute, int second) {
     static bool faceDrawn = false;
     if (!faceDrawn) { drawFace(); faceDrawn = true; }

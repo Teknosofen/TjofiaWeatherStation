@@ -6,12 +6,13 @@ class StepperGauge {
 public:
     StepperGauge(int p1, int p2, int p3, int p4, float minVal, float maxVal, int maxSteps)
         : motor(p1, p2, p3, p4),
-          _min(minVal), _max(maxVal), _maxSteps(maxSteps),
+          _minVal(minVal), _maxVal(maxVal), _maxSteps(maxSteps),
           _pos(0) {}
 
-    // Drive to zero position (call once at startup before any setValue).
-    // The gauge needle must be at its physical minimum stop when power-on.
-    void zero() { _pos = 0; }
+    // Set assumed position without moving the motor.
+    // Use on startup to restore the last persisted step count from NVS.
+    void setPos(int steps);
+    int  getPos() const { return _pos; }
 
     // Move needle to represent `val` (clamped to [min, max]).
     void setValue(float val, int stepDelay = 3);
@@ -20,7 +21,7 @@ public:
 
 private:
     Stepper28BYJ motor;
-    float _min, _max;
+    float _minVal, _maxVal;
     int   _maxSteps;
     int   _pos;
 
@@ -32,10 +33,13 @@ class Instruments {
 public:
     Instruments();
 
-    void begin();
+    // windSteps / presSteps: step positions restored from NVS (0 = needles at minimum).
+    void begin(int windSteps = 0, int presSteps = 0);
     void setWindSpeed(float knots);   // Motor 1
     void setPressure(float hPa);      // Motor 2
     void idle();                       // de-energise coils to save power
+    int  getWindSteps() const;
+    int  getPresSteps() const;
 
 private:
     StepperGauge _wind;

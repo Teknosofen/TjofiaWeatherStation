@@ -192,6 +192,74 @@ values used in this project:
 
 ---
 
+## 7. WiFi Setup and Weather Service
+
+### 7.1 Weather data source
+
+Weather data comes from **OpenWeatherMap** (OWM), free tier.
+The free plan allows 1 000 API calls per day; the firmware fetches every
+10 minutes (~144 calls/day), well within the limit.
+
+**Getting an API key:**
+
+1. Create a free account at [openweathermap.org](https://openweathermap.org)
+2. Confirm your e-mail address
+3. Go to **My Profile → API keys**
+4. Copy the default key (or create a named key, e.g. *TjofiaWX*)
+5. The key becomes active within a few minutes of account creation
+
+
+
+### 7.2 Web portal — access methods
+
+The firmware runs a permanent web portal. Two ways to reach it:
+
+| Situation | How to connect | URL |
+|---|---|---|
+| Device AP only (first boot, no WiFi yet) | Connect phone/laptop to **TjofiaWX-Setup** | `http://192.168.4.1` |
+| Device on home WiFi (normal operation) | Stay on home WiFi | `http://TjofiaWX.local` |
+| Device AP always runs in parallel | Connect to **TjofiaWX-Setup** | `http://192.168.4.1` |
+
+> **Note:** `TjofiaWX.local` uses mDNS (Bonjour). It works natively on
+> macOS, iOS, and Windows 10 1903+. Android support varies; use the IP
+> address `192.168.4.1` via the AP if `.local` does not resolve.
+
+**Portal pages:**
+
+| Path | Purpose |
+|---|---|
+| `/` | Settings — OWM API key form, current WiFi/IP info, WiFi reset |
+| `/wx` | Status — live weather, time, location, gauge steps, calibration toggle |
+| `/reset` | Clears saved WiFi credentials and restarts (confirmation prompt) |
+
+**First boot (no saved WiFi credentials):**
+
+1. Power on the ESP32
+2. Hotspot **TjofiaWX-Setup** appears — connect from any phone or laptop
+3. Open `http://192.168.4.1` — a WiFiManager credential page loads
+4. Select your home WiFi network, enter the password, and paste the OWM API key
+5. Save — the device connects to your router
+
+**After first boot:**
+
+The AP **TjofiaWX-Setup** stays visible at all times alongside the home WiFi
+connection. The OWM key can be updated at any time via `http://TjofiaWX.local/`
+or `http://192.168.4.1/` without reflashing.
+
+### 7.3 Geolocation
+
+The firmware determines latitude/longitude automatically via **ip-api.com**
+(no key required). The result is cached in flash (NVS) so subsequent boots
+are instant even if the service is temporarily unreachable.
+
+### 7.4 NTP time sync
+
+Local time is obtained from `pool.ntp.org` / `time.nist.gov` after WiFi
+connects. The UTC offset is derived from the ip-api geolocation response,
+so no manual timezone configuration is needed.
+
+---
+
 ## 8. Half-Step Sequence
 
 The same 8-phase sequence applies to both motors. Each row shows the coil states
@@ -237,21 +305,20 @@ lib_deps =
 ```
 
 The library extends **Adafruit GFX**, so all standard Adafruit GFX drawing and font
-functions are available. The constructor takes `(RST, DC, CS)` and uses the ESP32
-VSPI bus (CLK=GPIO18, MOSI=GPIO23) automatically.
+functions are available. The constructor takes `(RST, DC, CS)`; the SPI clock and
+data lines are fixed by the board variant.
 
 ```cpp
 // DisplayManager.cpp — initialisation
-// CLK = GPIO5 (board "SCK"), MOSI = GPIO18 (board "MOSI") — set by board definition
+// CLK = GPIO5 (board "SCK"), MOSI = GPIO18 (board "MOSI") — fixed by board definition
 DIYables_TFT_GC9A01_Round _tft(TFT_RST, TFT_DC, TFT_CS);  // RST=4, DC=13, CS=15
 _tft.begin();
 ```
 
-> **Note:** The HUZZAH32 board defines its SPI bus as SCK=GPIO5 (pin "SCK") and
-> MOSI=GPIO18 (pin "MOSI"). These are fixed by the board variant — the library
-> picks them up automatically via `SPI.begin()`. Only RST, DC, and CS are free
-> to assign. GPIO23 (board pin "SDA") is not used by the display and is available
-> for other purposes.
+> **Note:** The HUZZAH32 routes its SPI bus to SCK=GPIO5 and MOSI=GPIO18 — these
+> differ from the raw ESP32 VSPI defaults (CLK=18, MOSI=23). The library picks up
+> the correct pins automatically via the board's `SPI.begin()`. Only RST, DC, and
+> CS are free to assign.
 
 ### 9.2 Gauge physical limits (`config.h`)
 

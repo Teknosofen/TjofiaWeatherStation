@@ -4,10 +4,14 @@
 
 // ── StepperGauge ─────────────────────────────────────────────────────────────
 
+void StepperGauge::setPos(int steps) {
+    _pos = steps < 0 ? 0 : (steps > _maxSteps ? _maxSteps : steps);
+}
+
 int StepperGauge::valueToSteps(float val) const {
-    if (val <= _min) return 0;
-    if (val >= _max) return _maxSteps;
-    return (int)((_maxSteps * (val - _min)) / (_max - _min));
+    if (val <= _minVal) return 0;
+    if (val >= _maxVal) return _maxSteps;
+    return (int)((_maxSteps * (val - _minVal)) / (_maxVal - _minVal));
 }
 
 void StepperGauge::setValue(float val, int stepDelay) {
@@ -28,11 +32,13 @@ Instruments::Instruments()
             PRES_MIN_HPA, PRES_MAX_HPA, PRES_MAX_STEPS)
 {}
 
-void Instruments::begin() {
-    // Needles assumed at physical zero on power-up.
-    _wind.zero();
-    _pres.zero();
+void Instruments::begin(int windSteps, int presSteps) {
+    _wind.setPos(windSteps);
+    _pres.setPos(presSteps);
 }
+
+int Instruments::getWindSteps() const { return _wind.getPos(); }
+int Instruments::getPresSteps() const { return _pres.getPos(); }
 
 void Instruments::setWindSpeed(float knots) { _wind.setValue(knots); }
 void Instruments::setPressure(float hPa)    { _pres.setValue(hPa);  }

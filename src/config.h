@@ -26,8 +26,9 @@
 #define STEPS_PER_REV  4096
 
 // ── WiFi config portal ────────────────────────────────────────────────────────
-#define AP_SSID  "TjofiaWX-Setup"
-#define AP_PASS  ""          // leave empty for open AP
+#define AP_SSID    "TjofiaWX-Setup"
+#define AP_PASS    ""             // leave empty for open AP
+#define MDNS_NAME  "TjofiaWX"    // accessible as http://TjofiaWX.local on home WiFi
 
 // ── NTP ───────────────────────────────────────────────────────────────────────
 #define NTP_SERVER1  "pool.ntp.org"
@@ -45,6 +46,12 @@
 #define NVS_TZ           "timezone"
 #define NVS_LAT          "lat"
 #define NVS_LON          "lon"
+#define NVS_WIND_STEPS   "wind_steps"
+#define NVS_PRES_STEPS   "pres_steps"
+
+// ── Calibration reference positions ──────────────────────────────────────────
+#define CAL_WIND_KT      (10.0f * 1.94384f)   // 10 m/s expressed in knots
+#define CAL_PRES_HPA     1000.0f
 
 // ── Timing (milliseconds) ────────────────────────────────────────────────────
 #define WEATHER_INTERVAL_MS  (10UL * 60 * 1000)   // 10 min
@@ -61,6 +68,9 @@
 #define PRES_MIN_HPA   960.0f
 #define PRES_MAX_HPA  1040.0f
 #define PRES_MAX_STEPS (STEPS_PER_REV * 3 / 4)
+
+// ── Firmware identity ────────────────────────────────────────────────────────
+#define FW_VERSION  "1.0"
 
 // ── Display colours (RGB565) ─────────────────────────────────────────────────
 #define COL_BG      0x0000   // black
