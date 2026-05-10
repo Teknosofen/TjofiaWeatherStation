@@ -44,10 +44,13 @@ void DisplayManager::eraseHand(float angleDeg, int length, int thickness) {
 }
 
 void DisplayManager::drawFace() {
-    // Three-pixel bevelled ring: dark outer → mid-grey → white innermost
-    _tft.drawCircle(CX, CY, R,     0x4208);   // dark grey
-    _tft.drawCircle(CX, CY, R - 1, 0x8410);   // mid grey
-    _tft.drawCircle(CX, CY, R - 2, COL_FACE); // white
+    // Six-pixel bevelled ring: very dark outer → white innermost
+    _tft.drawCircle(CX, CY, R + 3, 0x2104);   // very dark grey (outermost)
+    _tft.drawCircle(CX, CY, R + 2, 0x4208);   // dark grey
+    _tft.drawCircle(CX, CY, R + 1, 0x630C);   // medium-dark grey
+    _tft.drawCircle(CX, CY, R,     0x8410);   // medium grey
+    _tft.drawCircle(CX, CY, R - 1, 0xC618);   // light grey
+    _tft.drawCircle(CX, CY, R - 2, COL_FACE); // white (innermost)
 
     for (int i = 0; i < 60; i++) {
         float rad   = (i * 6 - 90) * (float)M_PI / 180.0f;
