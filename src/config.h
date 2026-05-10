@@ -49,6 +49,7 @@
 #define NVS_UTC_OFF      "utc_off"
 #define NVS_LAT          "lat"
 #define NVS_LON          "lon"
+#define NVS_LOC_PINNED   "loc_pinned"   // bool — user has manually set lat/lon
 #define NVS_WIND_STEPS   "wind_steps"
 #define NVS_PRES_STEPS   "pres_steps"
 

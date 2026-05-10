@@ -101,6 +101,7 @@ static String buildConfigPage() {
     p += F("'><button class='btn' type='submit'>Save</button></form>"
            "<hr>"
            "<a class='btn' href='/wx'>Weather Status &amp; Calibration</a>"
+           "&nbsp;<a class='btn' href='/location'>&#128205; Set Location</a>"
            "<hr><small>WiFi: ");
     p += WiFi.SSID();
     p += F("&nbsp;&nbsp;IP: ");
@@ -212,6 +213,111 @@ static String buildStatusPage() {
     return p;
 }
 
+// ── Location pin page ─────────────────────────────────────────────────────────
+
+static String buildLocationPage() {
+    prefs.begin(NVS_NS, true);
+    bool pinned = prefs.getBool(NVS_LOC_PINNED, false);
+    prefs.end();
+
+    char latS[14], lonS[14];
+    float lat = geoInfo.valid ? geoInfo.lat : 62.0f;
+    float lon = geoInfo.valid ? geoInfo.lon : 15.0f;
+    snprintf(latS, sizeof(latS), "%.5f", lat);
+    snprintf(lonS, sizeof(lonS), "%.5f", lon);
+
+    String p;
+    p.reserve(3200);
+    p += F("<!DOCTYPE html><html><head>"
+           "<meta charset='utf-8'>"
+           "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+           "<title>Tjofia WX &mdash; Location</title>"
+           "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/>"
+           "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>"
+           "<style>"
+           "body{font-family:sans-serif;max-width:640px;margin:12px auto;padding:0 12px}"
+           "h1{font-size:1.2em}"
+           "#map{height:350px;border-radius:6px;margin:10px 0;border:1px solid #ccc}"
+           ".btn{display:inline-block;padding:8px 14px;background:#1fa3ec;color:#fff;"
+                "border:none;border-radius:4px;cursor:pointer;text-decoration:none;margin:3px 2px}"
+           ".red{background:#c00}.grn{background:#2a2}"
+           "p.h{font-size:.85em;color:#555;margin:.4em 0}"
+           "</style></head><body>"
+           "<h1>&#128205; Set Location</h1>");
+    if (pinned) {
+        p += F("<p style='color:#2a2;font-weight:bold'>&#10003; Location is pinned "
+               "&#8212; IP geolocation is ignored for weather data.</p>");
+    }
+    p += F("<p class='h'>Click the map to place a pin, or tap <b>Use my GPS</b>."
+           " The map requires internet access.</p>"
+           "<button class='btn' onclick='useGPS()'>&#127968; Use my GPS</button>"
+           "<div id='map'></div>"
+           "<form method='POST' action='/location/save'>"
+           "<input type='hidden' id='lat' name='lat' value='"); p += latS;
+    p += F("'><input type='hidden' id='lon' name='lon' value='"); p += lonS;
+    p += F("'><p id='pin' class='h'>Current: "); p += latS; p += F("&deg;N, "); p += lonS;
+    p += F("&deg;E</p>"
+           "<button class='btn grn' type='submit'>&#128190; Save &amp; pin</button>"
+           "&nbsp;<a class='btn red' href='/location/clear'>&#10060; Clear pin (use auto)</a>"
+           "&nbsp;<a class='btn' href='/'>&#8592; Back</a>"
+           "</form>"
+           "<script>"
+           "var lt="); p += latS; p += F(",ln="); p += lonS;
+    p += F(";"
+           "var map=L.map('map').setView([lt,ln],10);"
+           "L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',"
+           "{attribution:'&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>',"
+           "maxZoom:19}).addTo(map);"
+           "var mk=L.marker([lt,ln],{draggable:true}).addTo(map);"
+           "mk.on('dragend',function(){place(mk.getLatLng().lat,mk.getLatLng().lng)});"
+           "map.on('click',function(e){place(e.latlng.lat,e.latlng.lng)});"
+           "function place(a,b){"
+             "mk.setLatLng([a,b]);"
+             "document.getElementById('lat').value=a.toFixed(5);"
+             "document.getElementById('lon').value=b.toFixed(5);"
+             "document.getElementById('pin').textContent="
+               "'Pin: '+a.toFixed(4)+'\\u00b0N, '+b.toFixed(4)+'\\u00b0E';}"
+           "function useGPS(){"
+             "if(!navigator.geolocation){alert('Geolocation not available in this browser');return;}"
+             "navigator.geolocation.getCurrentPosition("
+               "function(p){map.setView([p.coords.latitude,p.coords.longitude],14);"
+                           "place(p.coords.latitude,p.coords.longitude);},"
+               "function(e){alert('Could not get position: '+e.message);});}"
+           "</script></body></html>");
+    return p;
+}
+
+static void handleLocationPage() {
+    server.send(200, "text/html", buildLocationPage());
+}
+
+static void handleLocationSave() {
+    if (server.hasArg("lat") && server.hasArg("lon")) {
+        float lat = server.arg("lat").toFloat();
+        float lon = server.arg("lon").toFloat();
+        geoInfo.lat = lat;
+        geoInfo.lon = lon;
+        geoInfo.valid = true;
+        prefs.begin(NVS_NS, false);
+        prefs.putFloat(NVS_LAT, lat);
+        prefs.putFloat(NVS_LON, lon);
+        prefs.putBool(NVS_LOC_PINNED, true);
+        prefs.end();
+        Serial.printf("Location pinned: %.5f, %.5f\n", lat, lon);
+    }
+    server.sendHeader("Location", "/location");
+    server.send(303);
+}
+
+static void handleLocationClear() {
+    prefs.begin(NVS_NS, false);
+    prefs.remove(NVS_LOC_PINNED);
+    prefs.end();
+    Serial.println("Location pin cleared — reverting to IP geolocation");
+    server.sendHeader("Location", "/location");
+    server.send(303);
+}
+
 static void handleRoot()       { server.send(200, "text/html", buildConfigPage()); }
 static void handleStatusPage() { server.send(200, "text/html", buildStatusPage()); }
 
@@ -262,11 +368,14 @@ static void startPersistentAP() {
     // DNS: redirect every hostname → 192.168.4.1 (captive portal behaviour)
     dns.start(53, "*", IPAddress(192, 168, 4, 1));
 
-    server.on("/",      HTTP_GET,  handleRoot);
-    server.on("/save",  HTTP_POST, handleSave);
-    server.on("/wx",    HTTP_GET,  handleStatusPage);
-    server.on("/cal",   HTTP_POST, handleCalToggle);
-    server.on("/reset", HTTP_GET,  handleReset);
+    server.on("/",               HTTP_GET,  handleRoot);
+    server.on("/save",           HTTP_POST, handleSave);
+    server.on("/wx",             HTTP_GET,  handleStatusPage);
+    server.on("/cal",            HTTP_POST, handleCalToggle);
+    server.on("/reset",          HTTP_GET,  handleReset);
+    server.on("/location",       HTTP_GET,  handleLocationPage);
+    server.on("/location/save",  HTTP_POST, handleLocationSave);
+    server.on("/location/clear", HTTP_GET,  handleLocationClear);
     server.onNotFound([]() {
         server.sendHeader("Location", "/");
         server.send(302);
@@ -405,7 +514,8 @@ void loop() {
         float cachedLat = prefs.getFloat(NVS_LAT, 0);
         float cachedLon = prefs.getFloat(NVS_LON, 0);
         String cachedTz = prefs.getString(NVS_TZ, "");
-        int cachedOff   = prefs.getInt(NVS_UTC_OFF, 0);
+        int   cachedOff = prefs.getInt(NVS_UTC_OFF, 0);
+        bool  pinned    = prefs.getBool(NVS_LOC_PINNED, false);
         prefs.end();
 
         if (cachedLat != 0 || cachedLon != 0) {
@@ -416,16 +526,31 @@ void loop() {
 
         GeoInfo fresh;
         if (weather.fetchLocation(fresh)) {
-            geoInfo = fresh;
+            if (!pinned) {
+                // Auto mode — use ip-api lat/lon and city
+                geoInfo.lat     = fresh.lat;
+                geoInfo.lon     = fresh.lon;
+                geoInfo.city    = fresh.city;
+                geoInfo.country = fresh.country;
+            }
+            // Always take fresh UTC offset regardless of pin state
+            geoInfo.timezone  = fresh.timezone;
+            geoInfo.utcOffset = fresh.utcOffset;
+            geoInfo.valid = true;
+
             prefs.begin(NVS_NS, false);
-            prefs.putFloat(NVS_LAT, geoInfo.lat);
-            prefs.putFloat(NVS_LON, geoInfo.lon);
+            if (!pinned) {
+                prefs.putFloat(NVS_LAT, geoInfo.lat);
+                prefs.putFloat(NVS_LON, geoInfo.lon);
+            }
             prefs.putString(NVS_TZ, geoInfo.timezone);
             prefs.putInt(NVS_UTC_OFF, geoInfo.utcOffset);
             prefs.end();
-            Serial.printf("Location: %s, %s (%.4f, %.4f)  tz offset %+d s\n",
-                          geoInfo.city.c_str(), geoInfo.country.c_str(),
-                          geoInfo.lat, geoInfo.lon, geoInfo.utcOffset);
+
+            Serial.printf("Location: %s (%.4f, %.4f)  tz offset %+d s%s\n",
+                          pinned ? "[pinned]" : (geoInfo.city + ", " + geoInfo.country).c_str(),
+                          geoInfo.lat, geoInfo.lon, geoInfo.utcOffset,
+                          pinned ? " (UTC offset from ip-api)" : "");
         } else if (!geoInfo.valid) {
             Serial.println("Geolocation failed — using UTC");
             geoInfo.utcOffset = 0;
