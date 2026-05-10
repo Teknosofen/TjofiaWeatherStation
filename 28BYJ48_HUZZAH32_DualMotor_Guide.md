@@ -144,7 +144,7 @@ at 3.3V — no level shifting is needed when driven from the HUZZAH32.
 | Colour depth | 16-bit RGB565 |
 | Interface | 4-wire SPI (CLK, MOSI, CS, DC) + RST |
 | Supply voltage | 3.3V (logic and panel) |
-| Max SPI clock | 80 MHz (80 MHz used on ESP32 VSPI) |
+| SPI clock used | 80 MHz (ESP32 VSPI maximum; GC9A01 supports up to 100 MHz) |
 | Driver IC | Sitronix GC9A01 |
 
 ### 6.1 SPI Signal Roles
@@ -207,8 +207,6 @@ The free plan allows 1 000 API calls per day; the firmware fetches every
 3. Go to **My Profile → API keys**
 4. Copy the default key (or create a named key, e.g. *TjofiaWX*)
 5. The key becomes active within a few minutes of account creation
-
-
 
 ### 7.2 Web portal — access methods
 
@@ -297,16 +295,28 @@ files:
 **StepperGauge** wraps it with a value-to-steps mapping and tracks the current
 needle position so only the delta is driven on each update.
 
-### 9.1 Display driver (`platformio.ini`)
+### 9.1 Display driver
+
+The upstream **DIYables_TFT_Round** library is vendored into `lib/DIYables_TFT_Round/`
+with two patches applied:
+
+| Patch | Reason |
+|---|---|
+| SPI clock raised from 40 MHz → **80 MHz** | Upstream hardcoded 40 MHz; GC9A01 and ESP32 VSPI both support 80 MHz |
+| `fillScreen()` rewritten to send **512-byte chunks** | Upstream sent one byte at a time — 115 200 individual transfers to clear the screen; patched version uses 225 bulk writes (~10× faster) |
+| `spiTx()` switched to `SPI.writeBytes()` | `SPI.transfer()` overwrites the data buffer (full-duplex); `writeBytes()` is write-only and correct for a display |
+
+`platformio.ini` references Adafruit GFX directly (was previously a transitive
+dependency of the DIYables library):
 
 ```ini
 lib_deps =
-    https://github.com/DIYables/DIYables_TFT_Round.git
+    adafruit/Adafruit GFX Library @ ^1.11.0
 ```
 
-The library extends **Adafruit GFX**, so all standard Adafruit GFX drawing and font
-functions are available. The constructor takes `(RST, DC, CS)`; the SPI clock and
-data lines are fixed by the board variant.
+The library extends **Adafruit GFX**, so all standard drawing and font functions are
+available. The constructor takes `(RST, DC, CS)`; SPI clock and data lines are fixed
+by the board variant.
 
 ```cpp
 // DisplayManager.cpp — initialisation
@@ -333,6 +343,36 @@ _tft.begin();
 #define PRES_MAX_HPA  1040.0f
 #define PRES_MAX_STEPS (STEPS_PER_REV * 3 / 4)    // 3072 steps
 ```
+
+### 9.3 Main firmware features
+
+**Boot splash screen**
+
+On every power-on, the display shows the project name ("Teknosofen"), firmware
+version (`FW_VERSION` in `config.h`), and the build date (stamped automatically
+by the compiler via `__DATE__`) for 5 seconds before WiFi setup begins.
+Bumping the version requires only changing `FW_VERSION`.
+
+**Gauge position persistence (NVS)**
+
+After every weather update and every calibration mode change, the current step
+counts for both gauges are written to flash (ESP32 NVS, namespace `tjofia`,
+keys `wind_steps` / `pres_steps`). On the next boot, these counts are read back
+and passed to `Instruments::begin()`, which sets the internal position tracker
+without moving the motors. The needles stay physically where they were when power
+was cut; the firmware resumes with correct delta tracking from the first new
+weather fetch.
+
+**Calibration mode**
+
+Accessible from the `/wx` status page. When enabled, both gauges move to fixed
+reference positions (10 m/s wind / 1000 hPa pressure) and the new step counts are
+persisted to NVS. If the device is restarted while calibration mode is active, the
+motors resume from those reference positions. Disabling calibration mode returns
+the gauges to the last received weather values.
+
+Live weather updates are suppressed while calibration mode is active so the gauges
+do not move unexpectedly during adjustment.
 
 ---
 
