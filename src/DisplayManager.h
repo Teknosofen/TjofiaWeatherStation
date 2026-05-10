@@ -29,9 +29,11 @@ public:
 private:
     DIYables_TFT_GC9A01_Round _tft;
 
-    float _lastTemp  = -999;
-    int   _lastH = -1, _lastM = -1, _lastS = -1;
-    bool  _faceDrawn = false;
+    float   _lastTemp  = -999;
+    int     _lastH = -1, _lastM = -1, _lastS = -1;
+    bool    _faceDrawn = false;
+    char    _dispTempBuf[12] = {};  // text currently painted on screen
+    int16_t _dispTempX = -1;        // cursor X of that text
 
     static constexpr int CX = 120;
     static constexpr int CY = 120;

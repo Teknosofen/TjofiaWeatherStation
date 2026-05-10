@@ -61,21 +61,31 @@ void DisplayManager::drawFace() {
 }
 
 void DisplayManager::drawCentreText(float tempC) {
-    _tft.fillRect(CX - 45, CY + 20, 90, 28, COL_BG);
+    char buf[12];
+    if (tempC > -100.0f)
+        snprintf(buf, sizeof(buf), "%.1f\xB0" "C", tempC);
+    else
+        strcpy(buf, "---");
+
+    if (_dispTempBuf[0] != '\0' && strcmp(_dispTempBuf, buf) == 0) return;
+
     _tft.setFont(&FreeSans9pt7b);
-    _tft.setTextColor(COL_ACCENT);
     _tft.setTextSize(1);
 
-    char buf[12];
-    if (tempC > -100.0f) {
-        snprintf(buf, sizeof(buf), "%.1f\xB0" "C", tempC);
-    } else {
-        strcpy(buf, "---");
+    if (_dispTempBuf[0] != '\0') {
+        _tft.setTextColor(COL_BG);
+        _tft.setCursor(_dispTempX, CY + 40);
+        _tft.print(_dispTempBuf);
     }
+
     int16_t x1, y1; uint16_t tw, th;
     _tft.getTextBounds(buf, 0, 0, &x1, &y1, &tw, &th);
-    _tft.setCursor(CX - tw / 2, CY + 40);
+    _dispTempX = CX - (int16_t)(tw / 2);
+    _tft.setTextColor(COL_ACCENT);
+    _tft.setCursor(_dispTempX, CY + 40);
     _tft.print(buf);
+
+    strncpy(_dispTempBuf, buf, sizeof(_dispTempBuf) - 1);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -83,6 +93,7 @@ void DisplayManager::drawCentreText(float tempC) {
 void DisplayManager::showSplash(const String &version, const String &buildDate) {
     _faceDrawn = false;
     _lastS = -1;
+    _dispTempBuf[0] = '\0'; _dispTempX = -1;
     _tft.fillScreen(COL_BG);
     _tft.drawCircle(CX, CY, R,     COL_FACE);
     _tft.drawCircle(CX, CY, R - 1, COL_FACE);
@@ -146,6 +157,7 @@ void DisplayManager::setTemperature(float tempC) {
 
 void DisplayManager::showStatus(const String &line1, const String &line2) {
     _faceDrawn = false;
+    _dispTempBuf[0] = '\0'; _dispTempX = -1;
     _tft.fillScreen(COL_BG);
     _tft.drawCircle(CX, CY, R,     COL_FACE);
     _tft.drawCircle(CX, CY, R - 1, COL_FACE);
@@ -170,6 +182,7 @@ void DisplayManager::showStatus(const String &line1, const String &line2) {
 
 void DisplayManager::showError(const String &msg) {
     _faceDrawn = false;
+    _dispTempBuf[0] = '\0'; _dispTempX = -1;
     _tft.fillScreen(COL_BG);
     _tft.drawCircle(CX, CY, R, COL_ERROR);
 
@@ -190,6 +203,7 @@ void DisplayManager::showError(const String &msg) {
 
 void DisplayManager::showAPMode(const String &ssid) {
     _faceDrawn = false;
+    _dispTempBuf[0] = '\0'; _dispTempX = -1;
     _tft.fillScreen(COL_BG);
     _tft.drawCircle(CX, CY, R, 0x07FF);
 
