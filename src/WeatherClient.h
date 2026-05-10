@@ -30,4 +30,7 @@ public:
 
     // Populate WeatherData from OpenWeatherMap current-weather endpoint.
     bool fetchWeather(float lat, float lon, const String &apiKey, WeatherData &out);
+
+    // Reverse-geocode coordinates to city + country via Nominatim (no key needed).
+    bool fetchReverseGeo(float lat, float lon, String &city, String &country);
 };

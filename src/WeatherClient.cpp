@@ -68,3 +68,38 @@ bool WeatherClient::fetchWeather(float lat, float lon,
     out.valid = true;
     return true;
 }
+
+bool WeatherClient::fetchReverseGeo(float lat, float lon, String &city, String &country) {
+    char url[128];
+    snprintf(url, sizeof(url),
+             "https://nominatim.openstreetmap.org/reverse?format=json&lat=%.5f&lon=%.5f&zoom=10",
+             lat, lon);
+
+    WiFiClientSecure secure;
+    secure.setInsecure();
+    HTTPClient https;
+    https.setTimeout(8000);
+    if (!https.begin(secure, url)) return false;
+    https.addHeader("User-Agent", "TjofiaWX/1.0 (weather station)");
+
+    int code = https.GET();
+    if (code != 200) { https.end(); return false; }
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, https.getStream());
+    https.end();
+    if (err) return false;
+
+    JsonObject addr = doc["address"];
+    // Try progressively broader place names
+    const char *keys[] = { "city", "town", "village", "municipality", "county" };
+    city = "";
+    for (const char *k : keys) {
+        if (!addr[k].isNull()) {
+            city = addr[k].as<String>();
+            break;
+        }
+    }
+    country = addr["country"].as<String>();
+    return (city.length() > 0);
+}

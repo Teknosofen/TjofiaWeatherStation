@@ -295,15 +295,30 @@ static void handleLocationSave() {
     if (server.hasArg("lat") && server.hasArg("lon")) {
         float lat = server.arg("lat").toFloat();
         float lon = server.arg("lon").toFloat();
-        geoInfo.lat = lat;
-        geoInfo.lon = lon;
+        geoInfo.lat   = lat;
+        geoInfo.lon   = lon;
         geoInfo.valid = true;
+
+        // Resolve city name from new coordinates
+        String newCity, newCountry;
+        if (weather.fetchReverseGeo(lat, lon, newCity, newCountry)) {
+            geoInfo.city    = newCity;
+            geoInfo.country = newCountry;
+        } else {
+            geoInfo.city    = "";
+            geoInfo.country = "";
+        }
+
         prefs.begin(NVS_NS, false);
         prefs.putFloat(NVS_LAT, lat);
         prefs.putFloat(NVS_LON, lon);
         prefs.putBool(NVS_LOC_PINNED, true);
         prefs.end();
-        Serial.printf("Location pinned: %.5f, %.5f\n", lat, lon);
+
+        Serial.printf("Location pinned: %s%s(%.5f, %.5f)\n",
+                      geoInfo.city.isEmpty()    ? "" : (geoInfo.city + ", ").c_str(),
+                      geoInfo.country.isEmpty() ? "" : (geoInfo.country + "  ").c_str(),
+                      lat, lon);
     }
     server.sendHeader("Location", "/location");
     server.send(303);
