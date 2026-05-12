@@ -427,17 +427,18 @@ toggling RST again, which would otherwise reset the already-initialised first di
 |---|---|---|---|
 | 72 | Temperature `22.5°C` | FreeSansBold18pt | amber |
 | 92 | `feels 20.1°C` | FreeSans9pt | dim white |
-| 103 | separator line | — | dark grey |
-| 122 | Compass rose (r=14, left) + wind speed kn + bearing | FreeSans9pt | white / amber |
-| 151 | Pressure `1013 hPa` | FreeSans9pt | white |
-| 167 | Humidity `65% RH` | FreeSans9pt | white |
-| 176 | separator line | — | dark grey |
-| 191 | Weather description | FreeSans9pt | amber |
+| 101 | separator line | — | dark grey |
+| 135 | Compass rose (cx=58, cy=135, r=30) + wind speed m/s + bearing | FreeSans9pt | white / amber |
+| 178 | Pressure `1013 mBar` | FreeSans9pt | white |
+| 193 | Humidity `65% RH` | FreeSans9pt | white |
+| 202 | separator line | — | dark grey |
+| 215 | Weather description | FreeSans9pt | amber |
 
 The compass needle points FROM the wind source (meteorological convention: `deg=0`
-= from North, needle tip at top of circle). `WeatherDisplay::update()` does a full
-`fillScreen` + redraw on each call; at 10-minute intervals the brief black flash is
-imperceptible.
+= from North, needle tip at top of circle). Cardinal points N/S/E/W are labelled
+inside the ring using the built-in 6×8 font; **N is red**, S/E/W are white.
+`WeatherDisplay::update()` does a full `fillScreen` + redraw on each call; at
+10-minute intervals the brief black flash is imperceptible.
 
 `platformio.ini` references Adafruit GFX directly (was previously a transitive
 dependency of the DIYables library):

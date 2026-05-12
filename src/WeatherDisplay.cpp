@@ -17,16 +17,22 @@ const char *WeatherDisplay::degToCompass(int deg) {
 }
 
 void WeatherDisplay::drawWindCompass(int cx, int cy, int r, int deg) {
-    // Outer ring
     _tft.drawCircle(cx, cy, r, 0x4208);
-    // N tick
-    _tft.fillRect(cx - 1, cy - r + 1, 3, 3, COL_FACE);
 
-    // Needle points FROM the wind source (meteorological convention).
-    // deg=0 → from North → tip at top of circle.
+    // Cardinal labels — built-in 6×8 font, placed just inside the ring.
+    _tft.setFont(nullptr);
+    _tft.setTextSize(1);
+    _tft.setTextColor(COL_SEC);            // N is red
+    _tft.setCursor(cx - 3, cy - r + 2);   _tft.print("N");
+    _tft.setTextColor(COL_FACE);           // S, E, W are white
+    _tft.setCursor(cx - 3, cy + r - 9);   _tft.print("S");
+    _tft.setCursor(cx + r - 7, cy - 4);   _tft.print("E");
+    _tft.setCursor(cx - r + 1, cy - 4);   _tft.print("W");
+
+    // Needle FROM wind source: deg=0 → from North → tip at top.
     float rad = (deg - 90.0f) * (float)M_PI / 180.0f;
-    int tx = cx + (int)((r - 2) * cosf(rad));
-    int ty = cy + (int)((r - 2) * sinf(rad));
+    int tx = cx + (int)((r - 4) * cosf(rad));
+    int ty = cy + (int)((r - 4) * sinf(rad));
     int bx = cx - (int)((r / 2) * cosf(rad));
     int by = cy - (int)((r / 2) * sinf(rad));
     _tft.drawLine(bx, by, tx, ty, COL_ACCENT);
@@ -40,7 +46,6 @@ void WeatherDisplay::update(const WeatherData &wd) {
     drawBezel();
 
     if (!wd.valid) {
-        // Shouldn't normally be called without data, but handle gracefully.
         _tft.setFont(&FreeSans9pt7b);
         _tft.setTextColor(0x7BEF);
         _tft.setTextSize(1);
@@ -49,7 +54,6 @@ void WeatherDisplay::update(const WeatherData &wd) {
         return;
     }
 
-    // Helper: print a string centred at y using current font/colour.
     auto centre = [&](const char *s, int y) {
         int16_t x1, y1; uint16_t tw, th;
         _tft.getTextBounds(s, 0, 0, &x1, &y1, &tw, &th);
@@ -73,39 +77,38 @@ void WeatherDisplay::update(const WeatherData &wd) {
     centre(buf, 92);
 
     // ── Separator ─────────────────────────────────────────────────────────────
-    _tft.drawLine(CX - 44, 103, CX + 44, 103, 0x4208);
+    _tft.drawLine(CX - 44, 101, CX + 44, 101, 0x4208);
 
-    // ── Wind: compass + speed + direction ────────────────────────────────────
-    // Compass rose left of centre; speed/dir text to the right.
-    drawWindCompass(72, 122, 14, wd.windDeg);
+    // ── Wind: compass (cx=58, cy=135, r=30) + speed + bearing text ───────────
+    drawWindCompass(58, 135, 30, wd.windDeg);
 
     _tft.setFont(&FreeSans9pt7b);
     _tft.setTextColor(COL_FACE);
-    snprintf(buf, sizeof(buf), "%.1f kn", wd.windSpeedMs * 1.94384f);
-    _tft.setCursor(95, 117);
+    snprintf(buf, sizeof(buf), "%.1f m/s", wd.windSpeedMs);
+    _tft.setCursor(96, 130);
     _tft.print(buf);
 
     _tft.setTextColor(COL_ACCENT);
     snprintf(buf, sizeof(buf), "%s", degToCompass(wd.windDeg));
-    _tft.setCursor(95, 133);
+    _tft.setCursor(96, 146);
     _tft.print(buf);
 
     // ── Pressure ─────────────────────────────────────────────────────────────
     _tft.setFont(&FreeSans9pt7b);
     _tft.setTextColor(COL_FACE);
-    snprintf(buf, sizeof(buf), "%.0f hPa", wd.pressureHPa);
-    centre(buf, 151);
+    snprintf(buf, sizeof(buf), "%.0f mBar", wd.pressureHPa);
+    centre(buf, 178);
 
     // ── Humidity ─────────────────────────────────────────────────────────────
     snprintf(buf, sizeof(buf), "%.0f%% RH", wd.humidity);
-    centre(buf, 167);
+    centre(buf, 193);
 
     // ── Separator ─────────────────────────────────────────────────────────────
-    _tft.drawLine(CX - 44, 176, CX + 44, 176, 0x4208);
+    _tft.drawLine(CX - 44, 202, CX + 44, 202, 0x4208);
 
-    // ── Description (amber, truncated to ~18 chars to stay inside bezel) ─────
+    // ── Description ───────────────────────────────────────────────────────────
     _tft.setTextColor(COL_ACCENT);
     strncpy(buf, wd.description.c_str(), 20);
     buf[20] = '\0';
-    centre(buf, 191);
+    centre(buf, 215);
 }
