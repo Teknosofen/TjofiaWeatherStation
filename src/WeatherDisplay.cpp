@@ -17,7 +17,9 @@ const char *WeatherDisplay::degToCompass(int deg) {
 }
 
 void WeatherDisplay::drawWindCompass(int cx, int cy, int r, int deg) {
-    _tft.drawCircle(cx, cy, r, 0x4208);
+    _tft.drawCircle(cx, cy, r + 1, 0x630C);   // outer — medium grey (shadow)
+    _tft.drawCircle(cx, cy, r,     COL_FACE);  // middle — white (highlight)
+    _tft.drawCircle(cx, cy, r - 1, 0xC618);   // inner — light grey (fade)
 
     // Cardinal labels — built-in 6×8 font, placed just inside the ring.
     _tft.setFont(nullptr);
