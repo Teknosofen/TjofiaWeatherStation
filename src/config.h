@@ -10,6 +10,12 @@
 #define TFT_RST    4   // board pin "A5"   — wire display RST  here
 #define TFT_BL    -1   // set to GPIO pin if backlight is PWM-controlled
 
+// ── Display 2 (GC9A01, shares SCK/MOSI/DC/RST with display 1) ───────────────
+#define TFT2_CS       21   // board pin "D21" — wire second display CS here
+
+// ── PWM output (electrical speed indicator, future use) ──────────────────────
+#define PWM_SPEED_PIN 22   // board pin "D22" — LEDC PWM output
+
 // ── Motor 1  (Wind-speed gauge) ───────────────────────────────────────────────
 #define MOTOR1_P1  14
 #define MOTOR1_P2  27

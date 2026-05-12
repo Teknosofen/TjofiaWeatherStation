@@ -8,12 +8,14 @@
 #include <time.h>
 
 #include "config.h"
-#include "DisplayManager.h"
+#include "ClockDisplay.h"
+#include "WeatherDisplay.h"
 #include "Instruments.h"
 #include "WeatherClient.h"
 
 // ── Module instances ──────────────────────────────────────────────────────────
-static DisplayManager display;
+static ClockDisplay   clockDisp(TFT_CS);      // primary: owns RST pulse
+static WeatherDisplay weatherDisp(TFT2_CS);   // secondary: rst=-1 by default
 static Instruments    instruments;
 static WeatherClient  weather;
 static Preferences    prefs;
@@ -429,7 +431,8 @@ static bool startWifi() {
     wm.setConfigPortalTimeout(WIFI_TIMEOUT_S);
     wm.setTitle("Tjofia Weather Station");
 
-    display.showAPMode(AP_SSID);
+    clockDisp.showAPMode(AP_SSID);
+    weatherDisp.showAPMode(AP_SSID);
     bool connected = (strlen(AP_PASS) > 0)
         ? wm.autoConnect(AP_SSID, AP_PASS)
         : wm.autoConnect(AP_SSID);
@@ -487,8 +490,11 @@ void setup() {
 
     instruments.begin(windSteps, presSteps);
 
-    if (!display.begin()) Serial.println("Display init failed");
-    display.showSplash("v" FW_VERSION, __DATE__);
+    // Primary begin() drives the shared RST line; secondary begin() skips it.
+    if (!clockDisp.begin())   Serial.println("Display 1 init failed");
+    if (!weatherDisp.begin()) Serial.println("Display 2 init failed");
+    clockDisp.showSplash("v" FW_VERSION, __DATE__);
+    weatherDisp.showSplash("v" FW_VERSION, __DATE__);
     delay(5000);
 
     state = State::WIFI_SETUP;
@@ -516,14 +522,16 @@ void loop() {
         }
         Serial.printf("WiFi: %s  IP: %s\n",
                       WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
-        display.showStatus("WiFi OK", WiFi.localIP().toString());
+        clockDisp.showStatus("WiFi OK", WiFi.localIP().toString());
+        weatherDisp.showStatus("WiFi OK", WiFi.localIP().toString());
         delay(1000);
         state = State::LOCATING;
         break;
     }
 
     case State::LOCATING: {
-        display.showStatus("Finding", "location...");
+        clockDisp.showStatus("Finding", "location...");
+        weatherDisp.showStatus("Finding", "location...");
 
         prefs.begin(NVS_NS, true);
         float cachedLat = prefs.getFloat(NVS_LAT, 0);
@@ -575,7 +583,8 @@ void loop() {
     }
 
     case State::SYNCING_TIME: {
-        display.showStatus("Syncing", "time...");
+        clockDisp.showStatus("Syncing", "time...");
+        weatherDisp.showStatus("Syncing", "time...");
         timeReady = syncTime(geoInfo.utcOffset);
         if (!timeReady) Serial.println("NTP sync failed");
         state = State::FETCHING_WEATHER;
@@ -583,7 +592,8 @@ void loop() {
     }
 
     case State::FETCHING_WEATHER: {
-        display.showStatus("Fetching", "weather...");
+        clockDisp.showStatus("Fetching", "weather...");
+        weatherDisp.showStatus("Fetching", "weather...");
 
         if (!owmKey.isEmpty() && geoInfo.valid) {
             bool ok = weather.fetchWeather(geoInfo.lat, geoInfo.lon, owmKey, weatherData);
@@ -597,7 +607,8 @@ void loop() {
                     weatherData.pressureHPa,
                     weatherData.description.c_str());
                 if (!calMode) {
-                    display.setTemperature(weatherData.tempC);
+                    clockDisp.setTemperature(weatherData.tempC);
+                    weatherDisp.update(weatherData);
                     instruments.setWindSpeed(msToKnots(weatherData.windSpeedMs));
                     instruments.setPressure(weatherData.pressureHPa);
                     instruments.idle();
@@ -621,7 +632,7 @@ void loop() {
             if (timeReady) {
                 int h, m, s;
                 getLocalTime(h, m, s);
-                display.drawClock(h, m, s);
+                clockDisp.drawClock(h, m, s);
             }
         }
         if (now - lastWeatherMs >= WEATHER_INTERVAL_MS) {
@@ -631,7 +642,8 @@ void loop() {
     }
 
     case State::ERROR: {
-        display.showError(errorMsg);
+        clockDisp.showError(errorMsg);
+        weatherDisp.showError(errorMsg);
         Serial.println("Fatal: " + errorMsg);
         delay(5000);
         ESP.restart();

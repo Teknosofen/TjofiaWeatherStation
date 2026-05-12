@@ -30,11 +30,13 @@ The HUZZAH32 uses an ESP32-WROOM32 module. Some board pins carry alternate label
 
 | Board label | GPIO # | Assigned to | Notes |
 |---|---|---|---|
-| SCK | 5 | Display CLK | Board SPI SCK — hardware pin, fixed |
-| MOSI | 18 | Display MOSI | Board SPI MOSI — hardware pin, fixed |
-| D15 | 15 | Display CS | Chip select |
-| D13 | 13 | Display DC | Data / command |
-| A5 | 4 | Display RST | Reset |
+| SCK | 5 | Display CLK | SPI SCK — shared by both displays |
+| MOSI | 18 | Display MOSI | SPI MOSI — shared by both displays |
+| D15 | 15 | Display 1 CS | Clock face display — chip select |
+| D13 | 13 | Display DC | Data/command — shared by both displays |
+| A5 | 4 | Display RST | Reset — shared by both displays (wired together) |
+| 21 | 21 | Display 2 CS | Weather display — chip select (`TFT2_CS`) |
+| 22 | 22 | PWM speed out | Electrical speed indicator output (`PWM_SPEED_PIN`) |
 | 14 | 14 | Motor 1 — IN1 | Wind gauge |
 | 27 | 27 | Motor 1 — IN2 | Wind gauge |
 | 32 | 32 | Motor 1 — IN3 | Wind gauge |
@@ -43,6 +45,7 @@ The HUZZAH32 uses an ESP32-WROOM32 module. Some board pins carry alternate label
 | A0 | 26 | Motor 2 — IN2 | Pressure gauge — board label A0, actual GPIO 26 |
 | RX | 16 | Motor 2 — IN3 | Pressure gauge — safe if Serial1 unused |
 | TX | 17 | Motor 2 — IN4 | Pressure gauge — safe if Serial1 unused |
+| 19 | 19 | (free) | SPI MISO — not needed (write-only displays); reserve for future use |
 | 34, 35, 36, 39 | — | Do not use for output | Input-only pins — no output driver |
 | 6–11 | — | Do not use | Internal SPI flash — never expose |
 
@@ -52,6 +55,27 @@ The HUZZAH32 uses an ESP32-WROOM32 module. Some board pins carry alternate label
 
 > **Note:** RX (GPIO 16) and TX (GPIO 17) are usable as general outputs as long
 > as you do not need the hardware Serial1 port.
+
+### 2.1 Second display wiring
+
+Both GC9A01 displays share the same SPI bus (SCK, MOSI) and the same DC and RST
+lines. Only the CS pin differs:
+
+| Signal | Both displays | Display 1 only | Display 2 only |
+|--------|--------------|----------------|----------------|
+| CLK | GPIO 5 | — | — |
+| MOSI | GPIO 18 | — | — |
+| DC | GPIO 13 | — | — |
+| RST | GPIO 4 | — | — |
+| CS | — | GPIO 15 | GPIO 21 |
+
+Wire the second display's CLK, MOSI, DC, and RST to the **same** board pins as
+the first display. Connect only CS to GPIO 21.
+
+**Initialisation order matters:** `clockDisp.begin()` is called first — this drives
+the shared RST line and resets both displays simultaneously. `weatherDisp.begin()`
+is called second with `rst=-1` so it sends init commands to the second display
+without toggling RST again (which would reset the already-running first display).
 
 ---
 
@@ -353,8 +377,11 @@ files:
 | `src/Stepper28BYJ.h` | Low-level half-step driver — one instance per motor |
 | `src/Instruments.h/cpp` | `StepperGauge` and `Instruments` — position-aware gauge abstraction |
 | `src/config.h` | All pin assignments, gauge limits, timing constants |
-| `src/DisplayManager.h/cpp` | GC9A01 display rendering — DIYables_TFT_Round driver |
-| `src/WeatherClient.h/cpp` | IP geolocation + OpenWeatherMap fetch |
+| `src/BaseDisplay.h/cpp` | Abstract base — owns `_tft`, bezel, boot screens (splash/status/error/AP) |
+| `src/ClockDisplay.h/cpp` | Extends `BaseDisplay` — analogue clock face, hands, centre temperature |
+| `src/WeatherDisplay.h/cpp` | Extends `BaseDisplay` — weather data panel (temp, wind, pressure, humidity) |
+| `src/DisplayManager.h` | Thin alias: `typedef ClockDisplay DisplayManager` (kept for compatibility) |
+| `src/WeatherClient.h/cpp` | IP geolocation + OpenWeatherMap fetch + Nominatim reverse geocoding |
 | `src/main.cpp` | State-machine entry point |
 | `src/demo/main.cpp` | Motor test sketch (see §9) |
 
@@ -362,7 +389,7 @@ files:
 **StepperGauge** wraps it with a value-to-steps mapping and tracks the current
 needle position so only the delta is driven on each update.
 
-### 9.1 Display driver
+### 9.1 Display driver and dual-display architecture
 
 The upstream **DIYables_TFT_Round** library is vendored into `lib/DIYables_TFT_Round/`
 with two patches applied:
@@ -373,23 +400,51 @@ with two patches applied:
 | `fillScreen()` rewritten to send **512-byte chunks** | Upstream sent one byte at a time — 115 200 individual transfers to clear the screen; patched version uses 225 bulk writes (~10× faster) |
 | `spiTx()` switched to `SPI.writeBytes()` | `SPI.transfer()` overwrites the data buffer (full-duplex); `writeBytes()` is write-only and correct for a display |
 
+**Class hierarchy**
+
+```
+BaseDisplay          owns _tft, drawBezel(), showSplash/Status/Error/APMode
+   ├── ClockDisplay  analogue clock face, hour/minute/second hands, centre temp
+   └── WeatherDisplay  weather data panel updated after each 10-min fetch
+```
+
+Two instances live in `main.cpp`:
+
+```cpp
+static ClockDisplay   clockDisp(TFT_CS);      // CS=15, RST=4 (drives shared RST)
+static WeatherDisplay weatherDisp(TFT2_CS);   // CS=21, rst=-1 (no RST toggle)
+```
+
+**Shared RST initialisation order:**
+`clockDisp.begin()` is called first — it drives GPIO 4 (RST) low→high, which resets
+both displays simultaneously (RST lines are wired together). `weatherDisp.begin()`
+is called second with `rst=-1`; it sends init commands to the second display without
+toggling RST again, which would otherwise reset the already-initialised first display.
+
+**WeatherDisplay layout (240×240 circle)**
+
+| y (baseline) | Content | Font | Colour |
+|---|---|---|---|
+| 72 | Temperature `22.5°C` | FreeSansBold18pt | amber |
+| 92 | `feels 20.1°C` | FreeSans9pt | dim white |
+| 103 | separator line | — | dark grey |
+| 122 | Compass rose (r=14, left) + wind speed kn + bearing | FreeSans9pt | white / amber |
+| 151 | Pressure `1013 hPa` | FreeSans9pt | white |
+| 167 | Humidity `65% RH` | FreeSans9pt | white |
+| 176 | separator line | — | dark grey |
+| 191 | Weather description | FreeSans9pt | amber |
+
+The compass needle points FROM the wind source (meteorological convention: `deg=0`
+= from North, needle tip at top of circle). `WeatherDisplay::update()` does a full
+`fillScreen` + redraw on each call; at 10-minute intervals the brief black flash is
+imperceptible.
+
 `platformio.ini` references Adafruit GFX directly (was previously a transitive
 dependency of the DIYables library):
 
 ```ini
 lib_deps =
     adafruit/Adafruit GFX Library @ ^1.11.0
-```
-
-The library extends **Adafruit GFX**, so all standard drawing and font functions are
-available. The constructor takes `(RST, DC, CS)`; SPI clock and data lines are fixed
-by the board variant.
-
-```cpp
-// DisplayManager.cpp — initialisation
-// CLK = GPIO5 (board "SCK"), MOSI = GPIO18 (board "MOSI") — fixed by board definition
-DIYables_TFT_GC9A01_Round _tft(TFT_RST, TFT_DC, TFT_CS);  // RST=4, DC=13, CS=15
-_tft.begin();
 ```
 
 > **Note:** The HUZZAH32 routes its SPI bus to SCK=GPIO5 and MOSI=GPIO18 — these
