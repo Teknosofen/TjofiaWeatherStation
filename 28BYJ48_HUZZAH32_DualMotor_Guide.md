@@ -141,17 +141,28 @@ Motor 1 and Motor 2.
 | +5V | — | Pin 9 (COM) | Red (common) |
 | GND | — | Pin 8 (GND) | — |
 
-**GC9A01 SPI Display**
+**GC9A01 SPI Displays — shared signals (wire to both displays)**
 
-| HUZZAH32 label | GPIO # | Connect to | Notes |
+| HUZZAH32 label | GPIO # | Display pin label | Notes |
 |---|---|---|---|
-| SCK | 5 | Display CLK | Board SPI SCK |
-| MOSI | 18 | Display MOSI | Board SPI MOSI |
-| D15 | 15 | Display CS | |
-| D13 | 13 | Display DC | |
-| A5 | 4 | Display RST | |
-| 3V | — | Display VCC | 3.3V |
-| GND | — | Display GND | shared ground |
+| SCK | 5 | **SCK** | SPI clock — board label matches display label |
+| MOSI | 18 | **SDA** | SPI data — display PCB labels this SDA, **not** I2C |
+| D13 | 13 | DC | Data / command select |
+| A5 | 4 | RST | Reset — wire both display RST pins together to this pin |
+| 3V | — | VCC | 3.3V supply — both displays |
+| GND | — | GND | Common ground — both displays |
+
+> **⚠ SPI, not I2C:** The GC9A01 module labels its data pin **SDA** and its clock
+> pin **SCK**, which makes it look like an I2C device. It is not — it is 4-wire SPI.
+> Connect SDA → MOSI (GPIO 18) and SCK → SCK (GPIO 5). There is no I2C address,
+> no pull-up resistor, and no SDA/SCL bidirectional bus involved.
+
+**GC9A01 SPI Displays — per-display CS (one wire each)**
+
+| HUZZAH32 label | GPIO # | Connect to | Display |
+|---|---|---|---|
+| D15 | 15 | CS | Display 1 — clock face |
+| 21 | 21 | CS | Display 2 — weather panel |
 
 ---
 
@@ -173,15 +184,19 @@ at 3.3V — no level shifting is needed when driven from the HUZZAH32.
 
 ### 6.1 SPI Signal Roles
 
-| Pin | Direction | Function |
-|---|---|---|
-| CLK | ESP32 → display | SPI clock |
-| MOSI | ESP32 → display | Serial data in (display has no MISO) |
-| CS | ESP32 → display | Chip select — active LOW |
-| DC | ESP32 → display | HIGH = data, LOW = command |
-| RST | ESP32 → display | Hardware reset — active LOW pulse on startup |
-| VCC | — | 3.3V supply |
-| GND | — | Common ground |
+| Display pin label | SPI signal | Direction | Function |
+|---|---|---|---|
+| SCK | CLK | ESP32 → display | SPI clock |
+| **SDA** | **MOSI** | ESP32 → display | Serial data in — **not I2C**; display has no MISO |
+| CS | CS | ESP32 → display | Chip select — active LOW |
+| DC | DC | ESP32 → display | HIGH = data, LOW = command |
+| RST | RST | ESP32 → display | Hardware reset — active LOW pulse on startup |
+| VCC | — | — | 3.3V supply |
+| GND | — | — | Common ground |
+
+> **Pin labelling quirk:** The physical module silkscreen reads **SDA** for the data
+> line and **SCK** for the clock, matching I2C conventions. The GC9A01 is purely SPI;
+> the labels are a common misnomer on round display breakouts. There is no I2C mode.
 
 ### 6.2 Initialisation Sequence
 
