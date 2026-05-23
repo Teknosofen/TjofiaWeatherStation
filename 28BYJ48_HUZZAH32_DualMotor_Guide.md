@@ -17,6 +17,7 @@ display (GC9A01, 240×240) shows weather and clock data. All control signals run
 | Controller | Adafruit HUZZAH32 (ESP32-WROOM32) |
 | Display | GC9A01 240×240 circular, hardware SPI (VSPI) |
 | Display library | DIYables_TFT_Round (Adafruit GFX compatible) |
+| Wind speed meter | Analog panel meter, 0–30 kn, driven by 12-bit LEDC PWM (GPIO22) |
 | Steps / rev (half-step) | 4096 — output shaft, internal 1:64 gear included |
 | Gear ratio | 1:64 internal (motor only — no external reduction) |
 | Motor supply | 5V external — NOT the 3.3V board rail |
@@ -266,7 +267,9 @@ The firmware runs a permanent web portal. Two ways to reach it:
 | Path | Purpose |
 |---|---|
 | `/` | Settings — OWM API key form, current WiFi/IP info, WiFi reset |
-| `/wx` | Status — live weather, time, location, gauge steps, calibration toggle |
+| `/wx` | Status — live weather, time, location, gauge steps, speed meter, calibration toggle |
+| `/location` | Map-based location pin — set lat/lon manually |
+| `/calib` | Calibration — set speed meter full-scale voltage (more options coming) |
 | `/reset` | Clears saved WiFi credentials and restarts (confirmation prompt) |
 
 **First boot (no saved WiFi credentials):**
@@ -396,9 +399,10 @@ files:
 | `src/ClockDisplay.h/cpp` | Extends `BaseDisplay` — analogue clock face, hands, centre temperature |
 | `src/WeatherDisplay.h/cpp` | Extends `BaseDisplay` — weather data panel (temp, wind, pressure, humidity) |
 | `src/DisplayManager.h` | Thin alias: `typedef ClockDisplay DisplayManager` (kept for compatibility) |
+| `src/SpeedMeter.h/cpp` | 12-bit LEDC PWM driver for the analog wind-speed meter panel |
 | `src/WeatherClient.h/cpp` | IP geolocation + OpenWeatherMap fetch + Nominatim reverse geocoding |
 | `src/main.cpp` | State-machine entry point |
-| `src/demo/main.cpp` | Motor test sketch (see §9) |
+| `src/demo/main.cpp` | Motor test sketch (see §11) |
 
 **Stepper28BYJ** is self-contained — no external stepper library needed.
 **StepperGauge** wraps it with a value-to-steps mapping and tracks the current
@@ -414,6 +418,7 @@ with two patches applied:
 | SPI clock raised from 40 MHz → **80 MHz** | Upstream hardcoded 40 MHz; GC9A01 and ESP32 VSPI both support 80 MHz |
 | `fillScreen()` rewritten to send **512-byte chunks** | Upstream sent one byte at a time — 115 200 individual transfers to clear the screen; patched version uses 225 bulk writes (~10× faster) |
 | `spiTx()` switched to `SPI.writeBytes()` | `SPI.transfer()` overwrites the data buffer (full-duplex); `writeBytes()` is write-only and correct for a display |
+| `begin()` skips reset when `_res == 0xFF` | The library stores the reset pin as `uint8_t`; passing `rst=-1` (the "no reset" sentinel) silently becomes `255`. Without this guard, `begin()` called `pinMode(255)` and `digitalWrite(255)`, generating HAL errors. Secondary displays sharing a RST line now pass `rst=-1` cleanly. |
 
 **Class hierarchy**
 
@@ -470,6 +475,8 @@ lib_deps =
 
 ### 9.2 Gauge physical limits (`config.h`)
 
+**Stepper gauges**
+
 ```cpp
 // Motor 1 – wind speed: 0–60 knots → 0 to 3/4 revolution
 #define WIND_MIN_KT      0.0f
@@ -481,6 +488,21 @@ lib_deps =
 #define PRES_MAX_HPA  1040.0f
 #define PRES_MAX_STEPS (STEPS_PER_REV * 3 / 4)    // 3072 steps
 ```
+
+**PWM wind speed meter (`SpeedMeter` class, GPIO22)**
+
+The third instrument is an analog panel meter with a 0–300 mV (nominal) full-scale range, wired directly to GPIO22. The `SpeedMeter` class drives the pin with a 12-bit, 1 kHz LEDC PWM signal; the meter's own inertia filters the switching to a steady deflection.
+
+| Parameter | Value |
+|---|---|
+| GPIO | 22 (`PWM_SPEED_PIN`) |
+| LEDC resolution | 12-bit (4096 steps) |
+| LEDC frequency | 1 kHz |
+| Scale | 0–30 kn → 0–fullScaleMv |
+| Default full-scale | 300 mV |
+| Supply voltage used for duty calc | 3300 mV (3.3V rail) |
+
+The full-scale voltage is user-adjustable via the `/calib` web page and persisted in NVS under the key `pwm_fs_mv`. Changing it does not require reflashing — save and the new calibration is applied immediately.
 
 ### 9.3 Main firmware features
 
@@ -496,13 +518,20 @@ Once running, the two displays diverge: display 1 (clock face) shows the analogu
 clock updated every second; display 2 (weather panel) shows the weather data layout
 and refreshes after each 10-minute weather fetch.
 
-**Startup motor self-test**
+**Startup self-test — motors and speed meter simultaneously**
 
-Immediately after the splash appears, `Instruments::selfTest()` sweeps both gauge
-needles forward ≈ 10° (114 half-steps) and back simultaneously, confirming both
-motors are wired and energised before WiFi negotiation begins. The self-test
-returns each needle to its exact pre-test position, so the NVS-restored step
-counts remain valid and no recalibration is needed.
+Immediately after the splash screen appears, all three instruments perform a
+coordinated self-test driven directly from the `setup()` loop:
+
+- Both stepper needles sweep **+30°** (341 half-steps forward) then **−30°** back,
+  returning to their exact pre-test positions. NVS-restored step counts remain valid.
+- The PWM speed meter sweeps **150 → 200 → 100 → 150 mV** in sync with the motor
+  movement (150→200 mV on the forward sweep, 200→100 mV on the backward sweep, then
+  back to 150 mV at rest).
+
+The interleaving is done step-by-step in `setup()` using `Instruments::stepBoth()`
+and `SpeedMeter::setMillivolts()` in the same loop — no RTOS tasks are needed. Total
+self-test duration is approximately 2 seconds (341 steps × 3 ms × 2 directions).
 
 **Gauge position persistence (NVS)**
 
@@ -514,16 +543,32 @@ without moving the motors. The needles stay physically where they were when powe
 was cut; the firmware resumes with correct delta tracking from the first new
 weather fetch.
 
-**Calibration mode**
+**Wind speed tracking**
 
-Accessible from the `/wx` status page. When enabled, both gauges move to fixed
-reference positions (10 m/s wind / 1000 hPa pressure) and the new step counts are
-persisted to NVS. If the device is restarted while calibration mode is active, the
-motors resume from those reference positions. Disabling calibration mode returns
-the gauges to the last received weather values.
+After each successful weather fetch `SpeedMeter::setKnots()` is called with the
+current wind speed converted from m/s to knots. The duty cycle is computed as:
 
-Live weather updates are suppressed while calibration mode is active so the gauges
-do not move unexpectedly during adjustment.
+```
+duty = (knots / 30.0) × (fullScaleMv / 3300.0) × 4095
+```
+
+The `/wx` status page shows the current output in mV, the equivalent knots, and the
+calibrated full-scale value.
+
+**Calibration mode (stepper gauges)**
+
+Accessible from the `/wx` status page. When enabled, both stepper gauges move to
+fixed reference positions (≈19.4 kn / 1000 hPa) and the speed meter is also driven
+to the same reference wind speed. Step counts are persisted to NVS; the speed meter
+position is not persisted (it is always derived from weather data or the reference
+value on enable/disable). Live weather updates are suppressed while active.
+
+**Speed meter calibration page (`/calib`)**
+
+Accessible from the main config page. Allows setting the full-scale voltage (mV) —
+the output that drives the meter to full-scale (30 kn) deflection. The value is
+stored in NVS (`pwm_fs_mv`) and applied immediately without restart. More calibration
+options will be added to this page in future firmware revisions.
 
 ### 9.4 Display rendering
 

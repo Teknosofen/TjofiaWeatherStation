@@ -71,7 +71,7 @@ static void applyCalMode(bool enable) {
     } else if (weatherData.valid) {
         instruments.setWindSpeed(weatherData.windSpeedMs * 1.94384f);
         instruments.setPressure(weatherData.pressureHPa);
-        speedMeter.setKnots(msToKnots(weatherData.windSpeedMs));
+        speedMeter.setKnots(weatherData.windSpeedMs * 1.94384f);
     }
     instruments.idle();
     saveGaugePositions();
