@@ -6,6 +6,8 @@
 //   • SPI clock raised from 40 MHz to 80 MHz (GC9A01 max; ESP32 VSPI max)
 //   • spiTx() uses SPI.writeBytes() — write-only, does not corrupt the data buffer
 //   • fillScreen() sends 512-byte chunks instead of one byte at a time
+//   • _res == 0xFF (pass -1 cast to uint8_t) skips hardware reset — secondary displays
+//     sharing a RST line with an already-initialised primary pass rst=-1
 
 #define SPI_FREQ 80000000
 
@@ -21,7 +23,7 @@
 DIYables_TFT_GC9A01_Round::DIYables_TFT_GC9A01_Round(uint8_t resPin, uint8_t dcPin, uint8_t csPin)
     : Adafruit_GFX(240, 240), _res(resPin), _dc(dcPin), _cs(csPin), _rotation(0) {}
 
-inline void DIYables_TFT_GC9A01_Round::setReset(uint8_t val)       { digitalWrite(_res, val); }
+inline void DIYables_TFT_GC9A01_Round::setReset(uint8_t val)       { if (_res != 0xFF) digitalWrite(_res, val); }
 inline void DIYables_TFT_GC9A01_Round::setDataCommand(uint8_t val) { digitalWrite(_dc,  val); }
 inline void DIYables_TFT_GC9A01_Round::setChipSelect(uint8_t val)  { digitalWrite(_cs,  val); }
 inline void DIYables_TFT_GC9A01_Round::delayMs(uint16_t ms)        { delay(ms); }
@@ -58,17 +60,19 @@ inline void DIYables_TFT_GC9A01_Round::writeByte(uint8_t val) {
 }
 
 void DIYables_TFT_GC9A01_Round::begin() {
-    pinMode(_res, OUTPUT);
+    if (_res != 0xFF) pinMode(_res, OUTPUT);
     pinMode(_dc,  OUTPUT);
     pinMode(_cs,  OUTPUT);
     SPI.begin();
 
     setChipSelect(1);
     delayMs(5);
-    setReset(0);
-    delayMs(10);
-    setReset(1);
-    delayMs(120);
+    if (_res != 0xFF) {
+        setReset(0);
+        delayMs(10);
+        setReset(1);
+        delayMs(120);
+    }
 
     writeCommand(0xEF);
 
