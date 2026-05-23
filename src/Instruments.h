@@ -47,8 +47,8 @@ public:
 
     // Startup self-test: sweep both needles +steps then −steps simultaneously.
     // Net displacement is zero so restored NVS positions remain accurate.
-    // steps=114 ≈ 10° of output-shaft rotation (4096 steps/rev).
-    void selfTest(int steps = 114);
+    // steps=341 ≈ 30° of output-shaft rotation (4096 steps/rev).
+    void selfTest(int steps = 341);
 
 private:
     StepperGauge _wind;
