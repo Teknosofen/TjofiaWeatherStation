@@ -17,6 +17,14 @@ public:
         }
     }
 
+    // Advance exactly one half-step without blocking for a full sequence.
+    // Used when interleaving two motors in the same loop.
+    void step(int dir, int delayMs = 3) {
+        _step = (_step + dir + 8) % 8;
+        apply();
+        delay(delayMs);
+    }
+
     void off() { for (int p : pins) digitalWrite(p, LOW); }
 
 private:

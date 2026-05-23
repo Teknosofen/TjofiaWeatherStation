@@ -47,3 +47,16 @@ void Instruments::idle() {
     _wind.off();
     _pres.off();
 }
+
+void Instruments::selfTest(int steps) {
+    for (int i = 0; i < steps; i++) {
+        _wind.stepOnce(+1);
+        _pres.stepOnce(+1);
+    }
+    for (int i = 0; i < steps; i++) {
+        _wind.stepOnce(-1);
+        _pres.stepOnce(-1);
+    }
+    _wind.off();
+    _pres.off();
+}

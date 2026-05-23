@@ -495,7 +495,9 @@ void setup() {
     if (!weatherDisp.begin()) Serial.println("Display 2 init failed");
     clockDisp.showSplash("v" FW_VERSION, __DATE__);
     weatherDisp.showSplash("v" FW_VERSION, __DATE__);
-    delay(5000);
+    delay(2000);
+    instruments.selfTest();   // both needles sweep ±10° simultaneously
+    delay(2000);
 
     state = State::WIFI_SETUP;
 }

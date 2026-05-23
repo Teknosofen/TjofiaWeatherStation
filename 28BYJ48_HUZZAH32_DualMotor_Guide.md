@@ -484,12 +484,25 @@ lib_deps =
 
 ### 9.3 Main firmware features
 
-**Boot splash screen**
+**Boot sequence**
 
-On every power-on, the display shows the project name ("Teknosofen"), firmware
+On every power-on both displays show the project name ("Teknosofen"), firmware
 version (`FW_VERSION` in `config.h`), and the build date (stamped automatically
-by the compiler via `__DATE__`) for 5 seconds before WiFi setup begins.
+by the compiler via `__DATE__`). After 2 seconds the startup motor self-test runs
+(see below), then another 2 seconds of splash before WiFi setup begins.
 Bumping the version requires only changing `FW_VERSION`.
+
+Once running, the two displays diverge: display 1 (clock face) shows the analogue
+clock updated every second; display 2 (weather panel) shows the weather data layout
+and refreshes after each 10-minute weather fetch.
+
+**Startup motor self-test**
+
+Immediately after the splash appears, `Instruments::selfTest()` sweeps both gauge
+needles forward ≈ 10° (114 half-steps) and back simultaneously, confirming both
+motors are wired and energised before WiFi negotiation begins. The self-test
+returns each needle to its exact pre-test position, so the NVS-restored step
+counts remain valid and no recalibration is needed.
 
 **Gauge position persistence (NVS)**
 

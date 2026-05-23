@@ -19,6 +19,10 @@ public:
 
     void off() { motor.off(); }
 
+    // Advance one half-step without updating _pos.
+    // Use only when an equal and opposite step will follow (net zero displacement).
+    void stepOnce(int dir, int delayMs = 3) { motor.step(dir, delayMs); }
+
 private:
     Stepper28BYJ motor;
     float _minVal, _maxVal;
@@ -40,6 +44,11 @@ public:
     void idle();                       // de-energise coils to save power
     int  getWindSteps() const;
     int  getPresSteps() const;
+
+    // Startup self-test: sweep both needles +steps then −steps simultaneously.
+    // Net displacement is zero so restored NVS positions remain accurate.
+    // steps=114 ≈ 10° of output-shaft rotation (4096 steps/rev).
+    void selfTest(int steps = 114);
 
 private:
     StepperGauge _wind;
