@@ -524,8 +524,8 @@ void loop() {
         }
         Serial.printf("WiFi: %s  IP: %s\n",
                       WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
-        clockDisp.showStatus("WiFi OK", WiFi.localIP().toString());
-        weatherDisp.showStatus("WiFi OK", WiFi.localIP().toString());
+        clockDisp.showStatus(WiFi.SSID(), WiFi.localIP().toString());
+        weatherDisp.showStatus(WiFi.SSID(), WiFi.localIP().toString());
         delay(1000);
         state = State::LOCATING;
         break;
