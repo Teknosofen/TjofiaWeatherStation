@@ -100,14 +100,18 @@ void setup() {
     drawHelloWorld();
     delay(4000);
 
-    // ── Phase 3: motor sanity check ──────────────────────────────────────────
-    Serial.println("\n-- Phase 3: motor check --");
-    wind.rotate(WIND_MAX_STEPS, +1, STEP_MS);
-    pres.rotate(PRES_MAX_STEPS, +1, STEP_MS);
+    // ── Phase 3: motor sanity check — both motors move simultaneously ────────
+    Serial.println("\n-- Phase 3: motor check (simultaneous) --");
+    for (int i = 0; i < WIND_MAX_STEPS; i++) {
+        wind.step(+1, STEP_MS);
+        pres.step(+1, STEP_MS);
+    }
     wind.off(); pres.off();
     delay(400);
-    wind.rotate(WIND_MAX_STEPS, -1, STEP_MS);
-    pres.rotate(PRES_MAX_STEPS, -1, STEP_MS);
+    for (int i = 0; i < WIND_MAX_STEPS; i++) {
+        wind.step(-1, STEP_MS);
+        pres.step(-1, STEP_MS);
+    }
     wind.off(); pres.off();
 
     Serial.println("\nDemo complete. Needles should be at zero.");

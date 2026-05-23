@@ -45,6 +45,10 @@ void WeatherDisplay::drawWindCompass(int cx, int cy, int r, int deg) {
 
 void WeatherDisplay::update(const WeatherData &wd) {
     _tft.fillScreen(COL_BG);
+    // Minimal edge rings — two circles to anchor the round framebuffer
+    // after fillScreen without the heavy gradient bezel.
+    _tft.drawCircle(CX, CY, R,     0x4208);
+    _tft.drawCircle(CX, CY, R - 1, 0x2104);
 
     if (!wd.valid) {
         _tft.setFont(&FreeSans9pt7b);

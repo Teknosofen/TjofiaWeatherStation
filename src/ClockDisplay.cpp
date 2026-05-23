@@ -46,6 +46,7 @@ void ClockDisplay::eraseHand(float angleDeg, int length, int thickness) {
 }
 
 void ClockDisplay::drawFace() {
+    _tft.fillScreen(COL_BG);
     drawBezel();
 
     for (int i = 0; i < 60; i++) {
