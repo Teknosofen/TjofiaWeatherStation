@@ -48,6 +48,11 @@ void Instruments::idle() {
     _pres.off();
 }
 
+void Instruments::stepBoth(int dir, int delayMs) {
+    _wind.stepOnce(dir, delayMs);
+    _pres.stepOnce(dir, delayMs);
+}
+
 void Instruments::selfTest(int steps) {
     for (int i = 0; i < steps; i++) {
         _wind.stepOnce(+1);

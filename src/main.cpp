@@ -12,11 +12,13 @@
 #include "WeatherDisplay.h"
 #include "Instruments.h"
 #include "WeatherClient.h"
+#include "SpeedMeter.h"
 
 // ── Module instances ──────────────────────────────────────────────────────────
 static ClockDisplay   clockDisp(TFT_CS);      // primary: owns RST pulse
 static WeatherDisplay weatherDisp(TFT2_CS);   // secondary: rst=-1 by default
 static Instruments    instruments;
+static SpeedMeter     speedMeter(PWM_SPEED_PIN);
 static WeatherClient  weather;
 static Preferences    prefs;
 
@@ -65,9 +67,11 @@ static void applyCalMode(bool enable) {
     if (enable) {
         instruments.setWindSpeed(CAL_WIND_KT);
         instruments.setPressure(CAL_PRES_HPA);
+        speedMeter.setKnots(CAL_WIND_KT);
     } else if (weatherData.valid) {
         instruments.setWindSpeed(weatherData.windSpeedMs * 1.94384f);
         instruments.setPressure(weatherData.pressureHPa);
+        speedMeter.setKnots(msToKnots(weatherData.windSpeedMs));
     }
     instruments.idle();
     saveGaugePositions();
@@ -102,8 +106,9 @@ static String buildConfigPage() {
     p += key;
     p += F("'><button class='btn' type='submit'>Save</button></form>"
            "<hr>"
-           "<a class='btn' href='/wx'>Weather Status &amp; Calibration</a>"
+           "<a class='btn' href='/wx'>Weather Status</a>"
            "&nbsp;<a class='btn' href='/location'>&#128205; Set Location</a>"
+           "&nbsp;<a class='btn' href='/calib'>&#9881; Calibration</a>"
            "<hr><small>WiFi: ");
     p += WiFi.SSID();
     p += F("&nbsp;&nbsp;IP: ");
@@ -196,6 +201,11 @@ static String buildStatusPage() {
     row("Wind gauge", buf);
     snprintf(buf, sizeof(buf), "%d / %d steps", instruments.getPresSteps(), PRES_MAX_STEPS);
     row("Pres. gauge", buf);
+    snprintf(buf, sizeof(buf), "%.0f mV &nbsp;(%.1f kn)  fs=%.0f mV",
+             speedMeter.getCurrentMv(),
+             speedMeter.getCurrentMv() / speedMeter.getFullScaleMv() * SpeedMeter::MAX_KNOTS,
+             speedMeter.getFullScaleMv());
+    row("Speed meter", buf);
     row("Cal. mode", calMode ? "<b style='color:#c00'>ACTIVE</b>" : "off");
 
     p += F("</table>"
@@ -369,6 +379,67 @@ static void handleReset() {
     ESP.restart();
 }
 
+// ── Calibration page ─────────────────────────────────────────────────────────
+
+static String buildCalibPage() {
+    char fsMvStr[12], curMvStr[12];
+    snprintf(fsMvStr, sizeof(fsMvStr), "%.0f", speedMeter.getFullScaleMv());
+    snprintf(curMvStr, sizeof(curMvStr), "%.0f", speedMeter.getCurrentMv());
+
+    String p;
+    p.reserve(1400);
+    p += F("<!DOCTYPE html><html><head>"
+           "<meta charset='utf-8'>"
+           "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+           "<title>Tjofia WX &mdash; Calibration</title>"
+           "<style>"
+           "body{font-family:sans-serif;max-width:480px;margin:20px auto;padding:0 12px}"
+           "h1{font-size:1.2em}h2{font-size:1em;margin:0 0 6px}"
+           "input[type=number]{width:100%;padding:8px;box-sizing:border-box;"
+                              "margin:4px 0 10px;border:1px solid #ccc;border-radius:4px}"
+           ".btn{display:inline-block;padding:8px 16px;background:#1fa3ec;"
+               "color:#fff;border:none;border-radius:4px;cursor:pointer;text-decoration:none}"
+           ".box{background:#f9f9f9;border:1px solid #ddd;border-radius:6px;"
+                "padding:14px;margin:14px 0}"
+           "small{color:#666}"
+           "</style></head><body>"
+           "<h1>&#9881; Calibration</h1>"
+           "<div class='box'>"
+           "<h2>Wind Speed Meter (PWM &rarr; GPIO22)</h2>"
+           "<p><small>Range: 0&ndash;30 kn. Enter the output voltage (mV) that drives the"
+           " needle to full-scale. Current output: ");
+    p += curMvStr;
+    p += F(" mV.</small></p>"
+           "<form method='POST' action='/calib/save'>"
+           "<label>Full-scale voltage (mV)</label>"
+           "<input type='number' name='fs_mv' min='50' max='3300' step='1' value='");
+    p += fsMvStr;
+    p += F("'>"
+           "<button class='btn' type='submit'>Save</button>"
+           "</form></div>"
+           "<p><small>More calibration options coming soon.</small></p>"
+           "<a class='btn' href='/'>&#8592; Back</a>"
+           "</body></html>");
+    return p;
+}
+
+static void handleCalibPage() { server.send(200, "text/html", buildCalibPage()); }
+
+static void handleCalibSave() {
+    if (server.hasArg("fs_mv")) {
+        float mv = server.arg("fs_mv").toFloat();
+        if (mv >= 50.0f && mv <= 3300.0f) {
+            speedMeter.setFullScaleMv(mv);
+            prefs.begin(NVS_NS, false);
+            prefs.putFloat(NVS_PWM_FS_MV, mv);
+            prefs.end();
+            Serial.printf("Speed meter full-scale saved: %.0f mV\n", mv);
+        }
+    }
+    server.sendHeader("Location", "/calib");
+    server.send(303);
+}
+
 // ── Persistent AP — started once after WiFi connects ─────────────────────────
 
 static void startPersistentAP() {
@@ -393,6 +464,8 @@ static void startPersistentAP() {
     server.on("/location",       HTTP_GET,  handleLocationPage);
     server.on("/location/save",  HTTP_POST, handleLocationSave);
     server.on("/location/clear", HTTP_GET,  handleLocationClear);
+    server.on("/calib",          HTTP_GET,  handleCalibPage);
+    server.on("/calib/save",     HTTP_POST, handleCalibSave);
     server.onNotFound([]() {
         server.sendHeader("Location", "/");
         server.send(302);
@@ -483,12 +556,15 @@ void setup() {
     Serial.begin(115200);
 
     prefs.begin(NVS_NS, true);
-    int windSteps = prefs.getInt(NVS_WIND_STEPS, 0);
-    int presSteps = prefs.getInt(NVS_PRES_STEPS, 0);
+    int   windSteps = prefs.getInt  (NVS_WIND_STEPS, 0);
+    int   presSteps = prefs.getInt  (NVS_PRES_STEPS, 0);
+    float pwmFsMv   = prefs.getFloat(NVS_PWM_FS_MV,  SpeedMeter::DEFAULT_FS_MV);
     prefs.end();
     Serial.printf("Restored gauge pos: wind=%d  pres=%d steps\n", windSteps, presSteps);
+    Serial.printf("Speed meter full-scale: %.0f mV\n", pwmFsMv);
 
     instruments.begin(windSteps, presSteps);
+    speedMeter.begin(pwmFsMv);
 
     // Primary begin() drives the shared RST line; secondary begin() skips it.
     if (!clockDisp.begin())   Serial.println("Display 1 init failed");
@@ -496,7 +572,21 @@ void setup() {
     clockDisp.showSplash("v" FW_VERSION, __DATE__);
     weatherDisp.showSplash("v" FW_VERSION, __DATE__);
     delay(2000);
-    instruments.selfTest();   // both needles sweep ±10° simultaneously
+
+    // Self-test: motors sweep ±30°; PWM rides 150 → 200 → 100 → 150 mV simultaneously.
+    static const int ST = 341;
+    speedMeter.setMillivolts(150.0f);
+    for (int i = 0; i < ST; i++) {
+        instruments.stepBoth(+1, 3);
+        speedMeter.setMillivolts(150.0f + 50.0f * i / (ST - 1));   // 150 → 200 mV
+    }
+    for (int i = 0; i < ST; i++) {
+        instruments.stepBoth(-1, 3);
+        speedMeter.setMillivolts(200.0f - 100.0f * i / (ST - 1));  // 200 → 100 mV
+    }
+    instruments.idle();
+    speedMeter.setMillivolts(150.0f);   // rest at mid-scale until weather arrives
+
     delay(2000);
 
     state = State::WIFI_SETUP;
@@ -614,6 +704,7 @@ void loop() {
                     instruments.setWindSpeed(msToKnots(weatherData.windSpeedMs));
                     instruments.setPressure(weatherData.pressureHPa);
                     instruments.idle();
+                    speedMeter.setKnots(msToKnots(weatherData.windSpeedMs));
                     saveGaugePositions();
                 }
             } else {

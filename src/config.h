@@ -58,6 +58,7 @@
 #define NVS_LOC_PINNED   "loc_pinned"   // bool — user has manually set lat/lon
 #define NVS_WIND_STEPS   "wind_steps"
 #define NVS_PRES_STEPS   "pres_steps"
+#define NVS_PWM_FS_MV    "pwm_fs_mv"    // float — SpeedMeter full-scale mV
 
 // ── Calibration reference positions ──────────────────────────────────────────
 #define CAL_WIND_KT      (10.0f * 1.94384f)   // 10 m/s expressed in knots

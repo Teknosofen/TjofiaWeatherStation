@@ -45,6 +45,11 @@ public:
     int  getWindSteps() const;
     int  getPresSteps() const;
 
+    // Step both motors one half-step in the same direction simultaneously.
+    // Use for custom sweep sequences (e.g. startup self-test with PWM interleaved).
+    // Does not update internal position tracking — caller must ensure net-zero movement.
+    void stepBoth(int dir, int delayMs = 3);
+
     // Startup self-test: sweep both needles +steps then −steps simultaneously.
     // Net displacement is zero so restored NVS positions remain accurate.
     // steps=341 ≈ 30° of output-shaft rotation (4096 steps/rev).
