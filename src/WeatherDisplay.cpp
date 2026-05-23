@@ -45,7 +45,6 @@ void WeatherDisplay::drawWindCompass(int cx, int cy, int r, int deg) {
 
 void WeatherDisplay::update(const WeatherData &wd) {
     _tft.fillScreen(COL_BG);
-    drawBezel();
 
     if (!wd.valid) {
         _tft.setFont(&FreeSans9pt7b);
