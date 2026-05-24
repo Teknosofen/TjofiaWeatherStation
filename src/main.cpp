@@ -209,18 +209,9 @@ static String buildStatusPage() {
     row("Cal. mode", calMode ? "<b style='color:#c00'>ACTIVE</b>" : "off");
 
     p += F("</table>"
-           "<div class='cal'><h2>Calibration mode</h2>"
-           "<form method='POST' action='/cal'>"
-           "<label><input type='checkbox' name='cal'");
-    if (calMode) p += F(" checked");
-    p += F(" onchange='this.form.submit()'>"
-           "Move dials to reference &nbsp;(10&nbsp;m/s &nbsp;/&nbsp;1000&nbsp;hPa)"
-           "</label></form>"
-           "<p style='font-size:.85em;color:#666;margin:.5em 0 0'>"
-           "Position is saved; motors resume here if restarted in this state."
-           "</p></div>"
            "<p class='note'>Auto-refreshes every 30&nbsp;s &middot; "
-           "<a href='/'>&#9881; Setup</a></p>"
+           "<a href='/'>&#8592; Back</a>"
+           " &middot; <a href='/calib'>&#9881; Calibration</a></p>"
            "</body></html>");
     return p;
 }
@@ -367,7 +358,7 @@ static void handleCalToggle() {
         calModeRequested  = true;
         calModeRequestVal = requestOn;
     }
-    server.sendHeader("Location", "/wx");
+    server.sendHeader("Location", "/calib");
     server.send(303);
 }
 
@@ -387,7 +378,7 @@ static String buildCalibPage() {
     snprintf(curMvStr, sizeof(curMvStr), "%.0f", speedMeter.getCurrentMv());
 
     String p;
-    p.reserve(1400);
+    p.reserve(2000);
     p += F("<!DOCTYPE html><html><head>"
            "<meta charset='utf-8'>"
            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -401,13 +392,26 @@ static String buildCalibPage() {
                "color:#fff;border:none;border-radius:4px;cursor:pointer;text-decoration:none}"
            ".box{background:#f9f9f9;border:1px solid #ddd;border-radius:6px;"
                 "padding:14px;margin:14px 0}"
+           "label{cursor:pointer}"
+           "input[type=checkbox]{width:18px;height:18px;vertical-align:middle;margin-right:6px}"
            "small{color:#666}"
            "</style></head><body>"
            "<h1>&#9881; Calibration</h1>"
            "<div class='box'>"
-           "<h2>Wind Speed Meter (PWM &rarr; GPIO22)</h2>"
-           "<p><small>Range: 0&ndash;30 kn. Enter the output voltage (mV) that drives the"
-           " needle to full-scale. Current output: ");
+           "<h2>Stepper gauges</h2>"
+           "<form method='POST' action='/cal'>"
+           "<label><input type='checkbox' name='cal'");
+    if (calMode) p += F(" checked");
+    p += F(" onchange='this.form.submit()'>"
+           "Move dials to reference &nbsp;(10&nbsp;m/s / 1000&nbsp;hPa)"
+           "</label></form>"
+           "<p><small>Position saved to NVS. If power is cycled while active, "
+           "motors resume at the reference position.</small></p>"
+           "</div>"
+           "<div class='box'>"
+           "<h2>Wind speed meter (PWM &rarr; GPIO22)</h2>"
+           "<p><small>Range: 0&ndash;30 kn. Set the output voltage (mV) that drives"
+           " the needle to full-scale. Current output: ");
     p += curMvStr;
     p += F(" mV.</small></p>"
            "<form method='POST' action='/calib/save'>"
@@ -417,7 +421,6 @@ static String buildCalibPage() {
     p += F("'>"
            "<button class='btn' type='submit'>Save</button>"
            "</form></div>"
-           "<p><small>More calibration options coming soon.</small></p>"
            "<a class='btn' href='/'>&#8592; Back</a>"
            "</body></html>");
     return p;
@@ -430,6 +433,12 @@ static void handleCalibSave() {
         float mv = server.arg("fs_mv").toFloat();
         if (mv >= 50.0f && mv <= 3300.0f) {
             speedMeter.setFullScaleMv(mv);
+            // Re-apply current wind speed so needle moves immediately to reflect new cal
+            if (calMode) {
+                speedMeter.setKnots(CAL_WIND_KT);
+            } else if (weatherData.valid) {
+                speedMeter.setKnots(weatherData.windSpeedMs * 1.94384f);
+            }
             prefs.begin(NVS_NS, false);
             prefs.putFloat(NVS_PWM_FS_MV, mv);
             prefs.end();
