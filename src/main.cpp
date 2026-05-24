@@ -67,7 +67,7 @@ static void applyCalMode(bool enable) {
     if (enable) {
         instruments.setWindSpeed(CAL_WIND_KT);
         instruments.setPressure(CAL_PRES_HPA);
-        speedMeter.setKnots(CAL_WIND_KT);
+        speedMeter.setKnots(0.0f);   // North = zero position
     } else if (weatherData.valid) {
         instruments.setWindSpeed(weatherData.windSpeedMs * 1.94384f);
         instruments.setPressure(weatherData.pressureHPa);
@@ -403,7 +403,7 @@ static String buildCalibPage() {
            "<label><input type='checkbox' name='cal'");
     if (calMode) p += F(" checked");
     p += F(" onchange='this.form.submit()'>"
-           "Move dials to reference &nbsp;(10&nbsp;m/s / 1000&nbsp;hPa)"
+           "Move dials to reference &nbsp;&mdash; North (0&deg;) &bull; 10&nbsp;m/s &bull; 1000&nbsp;hPa"
            "</label></form>"
            "<p><small>Position saved to NVS. If power is cycled while active, "
            "motors resume at the reference position.</small></p>"
