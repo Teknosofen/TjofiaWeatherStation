@@ -26,42 +26,42 @@ void StepperGauge::setValue(float val, int stepDelay) {
 // ── Instruments ──────────────────────────────────────────────────────────────
 
 Instruments::Instruments()
-    : _wind(MOTOR1_P1, MOTOR1_P2, MOTOR1_P3, MOTOR1_P4,
-            WIND_MIN_KT,  WIND_MAX_KT,  WIND_MAX_STEPS),
+    : _wdir(MOTOR1_P1, MOTOR1_P2, MOTOR1_P3, MOTOR1_P4,
+            WDIR_MIN_DEG, WDIR_MAX_DEG, WDIR_MAX_STEPS),
       _pres(MOTOR2_P1, MOTOR2_P2, MOTOR2_P3, MOTOR2_P4,
             PRES_MIN_HPA, PRES_MAX_HPA, PRES_MAX_STEPS)
 {}
 
-void Instruments::begin(int windSteps, int presSteps) {
-    _wind.setPos(windSteps);
+void Instruments::begin(int wdirSteps, int presSteps) {
+    _wdir.setPos(wdirSteps);
     _pres.setPos(presSteps);
 }
 
-int Instruments::getWindSteps() const { return _wind.getPos(); }
+int Instruments::getWdirSteps() const { return _wdir.getPos(); }
 int Instruments::getPresSteps() const { return _pres.getPos(); }
 
-void Instruments::setWindSpeed(float knots) { _wind.setValue(knots); }
+void Instruments::setWindDir(float deg) { _wdir.setValue(deg); }
 void Instruments::setPressure(float hPa)    { _pres.setValue(hPa);  }
 
 void Instruments::idle() {
-    _wind.off();
+    _wdir.off();
     _pres.off();
 }
 
 void Instruments::stepBoth(int dir, int delayMs) {
-    _wind.stepOnce(dir, delayMs);
+    _wdir.stepOnce(dir, delayMs);
     _pres.stepOnce(dir, delayMs);
 }
 
 void Instruments::selfTest(int steps) {
     for (int i = 0; i < steps; i++) {
-        _wind.stepOnce(+1);
+        _wdir.stepOnce(+1);
         _pres.stepOnce(+1);
     }
     for (int i = 0; i < steps; i++) {
-        _wind.stepOnce(-1);
+        _wdir.stepOnce(-1);
         _pres.stepOnce(-1);
     }
-    _wind.off();
+    _wdir.off();
     _pres.off();
 }

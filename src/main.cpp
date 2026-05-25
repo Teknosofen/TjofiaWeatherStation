@@ -55,7 +55,7 @@ static WiFiManagerParameter owmParam("owm_key", "OpenWeatherMap API Key", owmBuf
 
 static void saveGaugePositions() {
     prefs.begin(NVS_NS, false);
-    prefs.putInt(NVS_WIND_STEPS, instruments.getWindSteps());
+    prefs.putInt(NVS_WIND_STEPS, instruments.getWdirSteps());
     prefs.putInt(NVS_PRES_STEPS, instruments.getPresSteps());
     prefs.end();
 }
@@ -65,11 +65,11 @@ static void saveGaugePositions() {
 static void applyCalMode(bool enable) {
     calMode = enable;
     if (enable) {
-        instruments.setWindSpeed(CAL_WIND_KT);
+        instruments.setWindDir(CAL_WDIR_DEG);                    // North
         instruments.setPressure(CAL_PRES_HPA);
-        speedMeter.setKnots(0.0f);   // North = zero position
+        speedMeter.setKnots(CAL_WIND_MS * 1.94384f);             // 10 m/s in knots
     } else if (weatherData.valid) {
-        instruments.setWindSpeed(weatherData.windSpeedMs * 1.94384f);
+        instruments.setWindDir(weatherData.windDeg);
         instruments.setPressure(weatherData.pressureHPa);
         speedMeter.setKnots(weatherData.windSpeedMs * 1.94384f);
     }
@@ -197,8 +197,8 @@ static String buildStatusPage() {
         row("Weather", "not yet available");
     }
 
-    snprintf(buf, sizeof(buf), "%d / %d steps", instruments.getWindSteps(), WIND_MAX_STEPS);
-    row("Wind gauge", buf);
+    snprintf(buf, sizeof(buf), "%d / %d steps", instruments.getWdirSteps(), WDIR_MAX_STEPS);
+    row("Wind dir", buf);
     snprintf(buf, sizeof(buf), "%d / %d steps", instruments.getPresSteps(), PRES_MAX_STEPS);
     row("Pres. gauge", buf);
     snprintf(buf, sizeof(buf), "%.0f mV &nbsp;(%.1f kn)  fs=%.0f mV",
@@ -565,14 +565,14 @@ void setup() {
     Serial.begin(115200);
 
     prefs.begin(NVS_NS, true);
-    int   windSteps = prefs.getInt  (NVS_WIND_STEPS, 0);
+    int   wdirSteps = prefs.getInt  (NVS_WIND_STEPS, 0);
     int   presSteps = prefs.getInt  (NVS_PRES_STEPS, 0);
     float pwmFsMv   = prefs.getFloat(NVS_PWM_FS_MV,  SpeedMeter::DEFAULT_FS_MV);
     prefs.end();
-    Serial.printf("Restored gauge pos: wind=%d  pres=%d steps\n", windSteps, presSteps);
+    Serial.printf("Restored gauge pos: wdir=%d  pres=%d steps\n", wdirSteps, presSteps);
     Serial.printf("Speed meter full-scale: %.0f mV\n", pwmFsMv);
 
-    instruments.begin(windSteps, presSteps);
+    instruments.begin(wdirSteps, presSteps);
     speedMeter.begin(pwmFsMv);
 
     // Primary begin() drives the shared RST line; secondary begin() skips it.
@@ -710,7 +710,7 @@ void loop() {
                 if (!calMode) {
                     clockDisp.setTemperature(weatherData.tempC);
                     weatherDisp.update(weatherData);
-                    instruments.setWindSpeed(msToKnots(weatherData.windSpeedMs));
+                    instruments.setWindDir(weatherData.windDeg);
                     instruments.setPressure(weatherData.pressureHPa);
                     instruments.idle();
                     speedMeter.setKnots(msToKnots(weatherData.windSpeedMs));

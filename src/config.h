@@ -16,7 +16,7 @@
 // ── PWM output (electrical speed indicator, future use) ──────────────────────
 #define PWM_SPEED_PIN 22   // board pin "D22" — LEDC PWM output
 
-// ── Motor 1  (Wind-speed gauge) ───────────────────────────────────────────────
+// ── Motor 1  (Wind direction gauge) ──────────────────────────────────────────
 #define MOTOR1_P1  14
 #define MOTOR1_P2  27
 #define MOTOR1_P3  32
@@ -61,8 +61,9 @@
 #define NVS_PWM_FS_MV    "pwm_fs_mv"    // float — SpeedMeter full-scale mV
 
 // ── Calibration reference positions ──────────────────────────────────────────
-#define CAL_WIND_KT      (10.0f * 1.94384f)   // 10 m/s expressed in knots
-#define CAL_PRES_HPA     1000.0f
+#define CAL_WDIR_DEG     0.0f    // North — wind direction stepper reference
+#define CAL_WIND_MS     10.0f   // m/s   — PWM speed meter reference
+#define CAL_PRES_HPA  1000.0f   // hPa   — pressure stepper reference
 
 // ── Timing (milliseconds) ────────────────────────────────────────────────────
 #define WEATHER_INTERVAL_MS  (10UL * 60 * 1000)   // 10 min
@@ -70,10 +71,10 @@
 #define WIFI_TIMEOUT_S       180                   // AP portal timeout
 
 // ── Gauge physical limits ────────────────────────────────────────────────────
-// Motor 1 – wind speed:  0–60 knots mapped to 0–(3/4 rev)
-#define WIND_MIN_KT      0.0f
-#define WIND_MAX_KT     60.0f
-#define WIND_MAX_STEPS  (STEPS_PER_REV * 3 / 4)
+// Motor 1 – wind direction: 0–360° mapped to 0–(3/4 rev)
+#define WDIR_MIN_DEG     0.0f
+#define WDIR_MAX_DEG   360.0f
+#define WDIR_MAX_STEPS (STEPS_PER_REV * 3 / 4)   // 3072 steps = full compass sweep
 
 // Motor 2 – pressure:  960–1040 hPa mapped to full scale
 #define PRES_MIN_HPA   960.0f

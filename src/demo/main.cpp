@@ -102,13 +102,13 @@ void setup() {
 
     // ── Phase 3: motor sanity check — both motors move simultaneously ────────
     Serial.println("\n-- Phase 3: motor check (simultaneous) --");
-    for (int i = 0; i < WIND_MAX_STEPS; i++) {
+    for (int i = 0; i < WDIR_MAX_STEPS; i++) {
         wind.step(+1, STEP_MS);
         pres.step(+1, STEP_MS);
     }
     wind.off(); pres.off();
     delay(400);
-    for (int i = 0; i < WIND_MAX_STEPS; i++) {
+    for (int i = 0; i < WDIR_MAX_STEPS; i++) {
         wind.step(-1, STEP_MS);
         pres.step(-1, STEP_MS);
     }

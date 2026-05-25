@@ -37,12 +37,12 @@ class Instruments {
 public:
     Instruments();
 
-    // windSteps / presSteps: step positions restored from NVS (0 = needles at minimum).
-    void begin(int windSteps = 0, int presSteps = 0);
-    void setWindSpeed(float knots);   // Motor 1
+    // wdirSteps / presSteps: step positions restored from NVS (0 = needles at minimum).
+    void begin(int wdirSteps = 0, int presSteps = 0);
+    void setWindDir(float deg);       // Motor 1 — wind direction 0–360°
     void setPressure(float hPa);      // Motor 2
     void idle();                       // de-energise coils to save power
-    int  getWindSteps() const;
+    int  getWdirSteps() const;
     int  getPresSteps() const;
 
     // Step both motors one half-step in the same direction simultaneously.
@@ -56,6 +56,6 @@ public:
     void selfTest(int steps = 341);
 
 private:
-    StepperGauge _wind;
+    StepperGauge _wdir;
     StepperGauge _pres;
 };
