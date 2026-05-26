@@ -15,14 +15,18 @@ bool BaseDisplay::begin() {
 }
 
 void BaseDisplay::drawBezel() {
-    _tft.drawCircle(CX, CY, R + 5, 0x0841);
-    _tft.drawCircle(CX, CY, R + 4, 0x1082);
-    _tft.drawCircle(CX, CY, R + 3, 0x2104);
-    _tft.drawCircle(CX, CY, R + 2, 0x4208);
-    _tft.drawCircle(CX, CY, R + 1, 0x630C);
-    _tft.drawCircle(CX, CY, R,     0x8410);
-    _tft.drawCircle(CX, CY, R - 1, 0xC618);
-    _tft.drawCircle(CX, CY, R - 2, COL_FACE);
+    // Paint filled circles from outside in; each overwrites the previous interior,
+    // leaving only a 1-pixel ring visible per colour.  fillCircle uses drawFastHLine
+    // scan-line bursts (~4.5 ms each) instead of per-pixel drawCircle (~9 ms each).
+    _tft.fillCircle(CX, CY, R + 5, 0x0841);
+    _tft.fillCircle(CX, CY, R + 4, 0x1082);
+    _tft.fillCircle(CX, CY, R + 3, 0x2104);
+    _tft.fillCircle(CX, CY, R + 2, 0x4208);
+    _tft.fillCircle(CX, CY, R + 1, 0x630C);
+    _tft.fillCircle(CX, CY, R,     0x8410);
+    _tft.fillCircle(CX, CY, R - 1, 0xC618);
+    _tft.fillCircle(CX, CY, R - 2, COL_FACE);
+    _tft.fillCircle(CX, CY, R - 3, COL_BG);   // restore interior to background colour
 }
 
 void BaseDisplay::showSplash(const String &version, const String &buildDate) {
