@@ -435,7 +435,7 @@ static void handleCalibSave() {
             speedMeter.setFullScaleMv(mv);
             // Re-apply current wind speed so needle moves immediately to reflect new cal
             if (calMode) {
-                speedMeter.setKnots(CAL_WIND_KT);
+                speedMeter.setKnots(CAL_WIND_MS * 1.94384f);
             } else if (weatherData.valid) {
                 speedMeter.setKnots(weatherData.windSpeedMs * 1.94384f);
             }
