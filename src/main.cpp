@@ -703,7 +703,6 @@ void loop() {
                     weatherData.pressureHPa,
                     weatherData.description.c_str());
                 if (!calMode) {
-                    clockDisp.setTemperature(weatherData.tempC);
                     weatherDisp.update(weatherData);
                     instruments.setWindDir(weatherData.windDeg);
                     instruments.setPressure(weatherData.pressureHPa);

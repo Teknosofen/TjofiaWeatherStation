@@ -1,6 +1,5 @@
 #include "ClockDisplay.h"
 #include <math.h>
-#include <Fonts/FreeSans9pt7b.h>
 
 ClockDisplay::ClockDisplay(int8_t cs, int8_t rst)
     : BaseDisplay(cs, rst) {}
@@ -8,10 +7,8 @@ ClockDisplay::ClockDisplay(int8_t cs, int8_t rst)
 // ── Boot-screen overrides — reset clock state before base renders ─────────────
 
 void ClockDisplay::resetClockState() {
-    _faceDrawn      = false;
-    _lastS          = -1;
-    _dispTempBuf[0] = '\0';
-    _dispTempX      = -1;
+    _faceDrawn = false;
+    _lastS     = -1;
 }
 
 void ClockDisplay::showSplash(const String &v, const String &d)
@@ -68,34 +65,6 @@ void ClockDisplay::drawFace() {
     _tft.fillCircle(CX, CY, 3, COL_ACCENT);
 }
 
-void ClockDisplay::drawCentreText(float tempC) {
-    char buf[12];
-    if (tempC > -100.0f)
-        snprintf(buf, sizeof(buf), "%.1f\xB0" "C", tempC);
-    else
-        strcpy(buf, "---");
-
-    if (_dispTempBuf[0] != '\0' && strcmp(_dispTempBuf, buf) == 0) return;
-
-    _tft.setFont(&FreeSans9pt7b);
-    _tft.setTextSize(1);
-
-    if (_dispTempBuf[0] != '\0') {
-        _tft.setTextColor(COL_BG);
-        _tft.setCursor(_dispTempX, CY + 40);
-        _tft.print(_dispTempBuf);
-    }
-
-    int16_t x1, y1; uint16_t tw, th;
-    _tft.getTextBounds(buf, 0, 0, &x1, &y1, &tw, &th);
-    _dispTempX = CX - (int16_t)(tw / 2);
-    _tft.setTextColor(COL_ACCENT);
-    _tft.setCursor(_dispTempX, CY + 40);
-    _tft.print(buf);
-
-    strncpy(_dispTempBuf, buf, sizeof(_dispTempBuf) - 1);
-}
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
 void ClockDisplay::drawClock(int hour, int minute, int second) {
@@ -142,12 +111,5 @@ void ClockDisplay::drawClock(int hour, int minute, int second) {
 
     _tft.fillCircle(CX, CY, 3, COL_ACCENT);
 
-    if (_lastTemp > -999) drawCentreText(_lastTemp);
-
     _lastH = hour; _lastM = minute; _lastS = second;
-}
-
-void ClockDisplay::setTemperature(float tempC) {
-    _lastTemp = tempC;
-    if (_lastS >= 0) drawCentreText(tempC);
 }
