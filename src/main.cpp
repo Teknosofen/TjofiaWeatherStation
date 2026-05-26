@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <LittleFS.h>
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -42,6 +43,8 @@ static unsigned long lastClockMs   = 0;
 static bool          timeReady     = false;
 
 // ── Calibration mode ──────────────────────────────────────────────────────────
+static String bootImg;                   // LittleFS path set as boot image ("/name.raw")
+
 static bool calMode           = false;
 static bool calModeRequested  = false;
 static bool calModeRequestVal = false;
@@ -109,6 +112,7 @@ static String buildConfigPage() {
            "<a class='btn' href='/wx'>Weather Status</a>"
            "&nbsp;<a class='btn' href='/location'>&#128205; Set Location</a>"
            "&nbsp;<a class='btn' href='/calib'>&#9881; Calibration</a>"
+           "&nbsp;<a class='btn' href='/images'>&#128444; Images</a>"
            "<hr><small>WiFi: ");
     p += WiFi.SSID();
     p += F("&nbsp;&nbsp;IP: ");
@@ -449,6 +453,231 @@ static void handleCalibSave() {
     server.send(303);
 }
 
+// ── Image management ─────────────────────────────────────────────────────────
+
+static String buildImagesPage() {
+    prefs.begin(NVS_NS, true);
+    String bi = prefs.getString(NVS_BOOT_IMG, "");
+    prefs.end();
+
+    String p;
+    p.reserve(5120);
+    p += F("<!DOCTYPE html><html><head>"
+           "<meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+           "<title>Tjofia WX \xe2\x80\x94 Images</title>"
+           "<style>"
+           "body{font-family:sans-serif;max-width:560px;margin:20px auto;padding:0 12px}"
+           "h1{font-size:1.2em}h2{font-size:1em;margin:0 0 6px}"
+           ".card{display:flex;align-items:center;gap:10px;background:#f9f9f9;"
+                 "border:1px solid #ddd;border-radius:6px;padding:10px;margin:8px 0}"
+           "canvas{width:80px;height:80px;flex-shrink:0;border-radius:50%;border:2px solid #ccc}"
+           ".info{flex:1;min-width:0}.fn{font-weight:bold;word-break:break-all;font-size:.9em}"
+           ".fs{font-size:.75em;color:#666;margin:2px 0 4px}"
+           ".btn{display:inline-block;padding:5px 10px;background:#1fa3ec;color:#fff;"
+                "border:none;border-radius:4px;cursor:pointer;text-decoration:none;"
+                "margin:2px 2px 2px 0;font-size:.85em}"
+           ".red{background:#c00}.grn{background:#2a2}"
+           ".box{background:#f9f9f9;border:1px solid #ddd;border-radius:6px;padding:14px;margin:14px 0}"
+           "pre{background:#eee;padding:8px;border-radius:4px;font-size:.72em;"
+               "overflow-x:auto;white-space:pre;margin:4px 0}"
+           "input[type=file]{display:block;margin:6px 0}"
+           "small{color:#666}"
+           "</style></head><body><h1>&#128444; Images</h1>");
+
+    // Build gallery ─────────────────────────────────────────────────────────
+    File root = LittleFS.open("/");
+    String jsLoads; jsLoads.reserve(256);
+    int idx = 0; bool any = false;
+
+    if (root) {
+        File entry = root.openNextFile();
+        while (entry) {
+            String nm = String(entry.name());
+            size_t sz  = entry.size();
+            entry.close();
+            entry = root.openNextFile();
+
+            if (!nm.endsWith(".raw")) continue;
+            any = true;
+
+            // normalise both sides for comparison
+            String nmNorm = nm.startsWith("/") ? nm.substring(1) : nm;
+            String biNorm = bi.startsWith("/") ? bi.substring(1) : bi;
+            bool   isBoot = (nmNorm == biNorm);
+
+            char cid[6]; snprintf(cid, sizeof(cid), "c%d", idx);
+
+            p += F("<div class='card'><canvas id='"); p += cid;
+            p += F("' width='240' height='240'></canvas><div class='info'>"
+                   "<div class='fn'>"); p += nmNorm;
+            p += F("</div><div class='fs'>");
+            if (sz == 115200) p += F("240\xc3\x97""240 RGB565");
+            else { char buf[28]; snprintf(buf,sizeof(buf),"%u B (invalid!)",(unsigned)sz); p += buf; }
+            p += F("</div>");
+
+            if (isBoot) {
+                p += F("<span class='btn grn'>&#10003; Boot image</span> ");
+            } else {
+                p += F("<form method='POST' action='/images/setboot' style='display:inline'>"
+                       "<input type='hidden' name='file' value='"); p += nmNorm;
+                p += F("'><button class='btn' type='submit'>Set as boot</button></form> ");
+            }
+            p += F("<form method='POST' action='/images/delete' style='display:inline'"
+                   " onsubmit=\"return confirm('Delete ");
+            p += nmNorm;
+            p += F("?')\">"
+                   "<input type='hidden' name='file' value='"); p += nmNorm;
+            p += F("'><button class='btn red' type='submit'>Delete</button></form>"
+                   "</div></div>");
+
+            jsLoads += "L('"; jsLoads += cid; jsLoads += "','"; jsLoads += nmNorm; jsLoads += "');";
+            idx++;
+        }
+    }
+
+    if (!any) p += F("<p><em>No images yet &mdash; upload one below.</em></p>");
+
+    // Upload form ────────────────────────────────────────────────────────────
+    if (server.hasArg("err"))
+        p += F("<p style='color:#c00'><b>Upload failed</b> &mdash; file must be exactly 115 200 bytes.</p>");
+
+    p += F("<div class='box'><h2>Upload image</h2>"
+           "<form method='POST' action='/images/upload' enctype='multipart/form-data'>"
+           "<input type='file' name='img' accept='.raw'>"
+           "<button class='btn' type='submit'>Upload</button></form>"
+           "<p><small>Must be <b>240\xc3\x97""240 raw RGB565</b>, exactly 115 200 bytes."
+           " Convert with Python (Pillow):</small></p>"
+           "<pre>"
+           "from PIL import Image\n"
+           "img = Image.open('photo.jpg').resize((240,240)).convert('RGB')\n"
+           "raw = bytearray()\n"
+           "for r,g,b in img.getdata():\n"
+           "    px = ((r&0xF8)<<8)|((g&0xFC)<<3)|(b>>3)\n"
+           "    raw += px.to_bytes(2,'big')\n"
+           "open('photo.raw','wb').write(raw)"
+           "</pre></div>");
+
+    // Boot image status ──────────────────────────────────────────────────────
+    p += F("<div class='box'><h2>Boot image</h2><p>");
+    if (bi.isEmpty()) {
+        p += F("None &mdash; weather display shows Teknosofen splash on startup.");
+    } else {
+        String biDisp = bi.startsWith("/") ? bi.substring(1) : bi;
+        p += F("Currently: <b>"); p += biDisp;
+        p += F("</b></p>"
+               "<form method='POST' action='/images/clearboot'>"
+               "<button class='btn red' type='submit'>Clear (use splash)</button></form>");
+    }
+    p += F("</p></div>");
+
+    // Canvas preview JS ──────────────────────────────────────────────────────
+    if (any) {
+        p += F("<script>"
+               "function L(id,nm){"
+               "fetch('/images/file?name='+encodeURIComponent(nm))"
+               ".then(r=>r.arrayBuffer()).then(b=>{"
+               "var d=new Uint8Array(b);"
+               "var c=document.getElementById(id),ctx=c.getContext('2d');"
+               "var img=ctx.createImageData(240,240);"
+               "for(var i=0;i<57600;i++){"
+               "var px=(d[i*2]<<8)|d[i*2+1];"
+               "img.data[i*4]=(px>>11)<<3;"
+               "img.data[i*4+1]=((px>>5)&63)<<2;"
+               "img.data[i*4+2]=(px&31)<<3;"
+               "img.data[i*4+3]=255;}"
+               "ctx.putImageData(img,0,0);});}"
+               );
+        p += jsLoads;
+        p += F("</script>");
+    }
+
+    p += F("<p><a class='btn' href='/'>&#8592; Back</a></p></body></html>");
+    return p;
+}
+
+static void handleImagesPage() { server.send(200, "text/html", buildImagesPage()); }
+
+// Upload state (file-scope so upload callback and completion handler share it)
+static File   _uploadFile;
+static bool   _uploadOk   = false;
+static String _uploadPath;
+
+static void handleImageUpload() {
+    HTTPUpload &up = server.upload();
+    if (up.status == UPLOAD_FILE_START) {
+        _uploadPath = "/" + String(up.filename);
+        if (!_uploadPath.endsWith(".raw")) _uploadPath += ".raw";
+        _uploadFile = LittleFS.open(_uploadPath, "w");
+        _uploadOk   = false;
+    } else if (up.status == UPLOAD_FILE_WRITE) {
+        if (_uploadFile) _uploadFile.write(up.buf, up.currentSize);
+    } else if (up.status == UPLOAD_FILE_END) {
+        if (_uploadFile) {
+            _uploadFile.close();
+            if (up.totalSize == 115200) {
+                _uploadOk = true;
+                Serial.printf("Image saved: %s\n", _uploadPath.c_str());
+            } else {
+                LittleFS.remove(_uploadPath);
+                Serial.printf("Image rejected (%u B): %s\n", up.totalSize, _uploadPath.c_str());
+            }
+        }
+    }
+}
+
+static void handleImageUploadDone() {
+    server.sendHeader("Location", _uploadOk ? "/images" : "/images?err=1");
+    server.send(303);
+}
+
+static void handleImageDelete() {
+    if (server.hasArg("file")) {
+        String path = "/" + server.arg("file");
+        LittleFS.remove(path);
+        // Clear boot-image NVS key if it points to the deleted file
+        prefs.begin(NVS_NS, true);
+        String bi = prefs.getString(NVS_BOOT_IMG, "");
+        prefs.end();
+        String biNorm = bi.startsWith("/") ? bi.substring(1) : bi;
+        if (biNorm == server.arg("file")) {
+            prefs.begin(NVS_NS, false); prefs.remove(NVS_BOOT_IMG); prefs.end();
+            bootImg = "";
+        }
+        Serial.printf("Image deleted: %s\n", path.c_str());
+    }
+    server.sendHeader("Location", "/images");
+    server.send(303);
+}
+
+static void handleImageSetBoot() {
+    if (server.hasArg("file")) {
+        bootImg = "/" + server.arg("file");
+        prefs.begin(NVS_NS, false);
+        prefs.putString(NVS_BOOT_IMG, bootImg);
+        prefs.end();
+        Serial.printf("Boot image set: %s\n", bootImg.c_str());
+    }
+    server.sendHeader("Location", "/images");
+    server.send(303);
+}
+
+static void handleImageClearBoot() {
+    bootImg = "";
+    prefs.begin(NVS_NS, false); prefs.remove(NVS_BOOT_IMG); prefs.end();
+    Serial.println("Boot image cleared");
+    server.sendHeader("Location", "/images");
+    server.send(303);
+}
+
+static void handleImageFile() {
+    if (!server.hasArg("name")) { server.send(400); return; }
+    String path = "/" + server.arg("name");
+    File f = LittleFS.open(path, "r");
+    if (!f) { server.send(404); return; }
+    server.streamFile(f, "application/octet-stream");
+    f.close();
+}
+
 // ── Persistent AP — started once after WiFi connects ─────────────────────────
 
 static void startPersistentAP() {
@@ -475,6 +704,12 @@ static void startPersistentAP() {
     server.on("/location/clear", HTTP_GET,  handleLocationClear);
     server.on("/calib",          HTTP_GET,  handleCalibPage);
     server.on("/calib/save",     HTTP_POST, handleCalibSave);
+    server.on("/images",         HTTP_GET,  handleImagesPage);
+    server.on("/images/upload",  HTTP_POST, handleImageUploadDone, handleImageUpload);
+    server.on("/images/delete",  HTTP_POST, handleImageDelete);
+    server.on("/images/setboot", HTTP_POST, handleImageSetBoot);
+    server.on("/images/clearboot",HTTP_POST,handleImageClearBoot);
+    server.on("/images/file",    HTTP_GET,  handleImageFile);
     server.onNotFound([]() {
         server.sendHeader("Location", "/");
         server.send(302);
@@ -563,10 +798,14 @@ static inline float msToKnots(float ms) { return ms * 1.94384f; }
 void setup() {
     Serial.begin(115200);
 
+    if (!LittleFS.begin(true))
+        Serial.println("LittleFS mount failed — images unavailable");
+
     prefs.begin(NVS_NS, true);
     int   wdirSteps = prefs.getInt  (NVS_WIND_STEPS, 0);
     int   presSteps = prefs.getInt  (NVS_PRES_STEPS, 0);
     float pwmFsMv   = prefs.getFloat(NVS_PWM_FS_MV,  SpeedMeter::DEFAULT_FS_MV);
+    bootImg         = prefs.getString(NVS_BOOT_IMG,   "");
     prefs.end();
     Serial.printf("Restored gauge pos: wdir=%d  pres=%d steps\n", wdirSteps, presSteps);
     Serial.printf("Speed meter full-scale: %.0f mV\n", pwmFsMv);
@@ -578,7 +817,12 @@ void setup() {
     if (!clockDisp.begin())   Serial.println("Display 1 init failed");
     if (!weatherDisp.begin()) Serial.println("Display 2 init failed");
     clockDisp.showSplash("v" FW_VERSION, __DATE__);
-    weatherDisp.showSplash("v" FW_VERSION, __DATE__);
+    // Weather display: boot image if set, otherwise Teknosofen splash
+    if (bootImg.isEmpty() || !weatherDisp.showImage(bootImg.c_str())) {
+        weatherDisp.showSplash("v" FW_VERSION, __DATE__);
+    } else {
+        Serial.printf("Boot image: %s\n", bootImg.c_str());
+    }
     delay(2000);
 
     // Self-test: motors sweep ±30°; PWM rides 150 → 200 → 100 → 150 mV simultaneously.

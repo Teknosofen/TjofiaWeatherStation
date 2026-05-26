@@ -1,8 +1,25 @@
 #include "BaseDisplay.h"
+#include <LittleFS.h>
 #include <Fonts/FreeSans9pt7b.h>
 
 BaseDisplay::BaseDisplay(int8_t cs, int8_t rst)
     : _tft(rst, TFT_DC, cs) {}
+
+bool BaseDisplay::showImage(const char *path) {
+    File f = LittleFS.open(path, "r");
+    if (!f || f.size() != 115200) { if (f) f.close(); return false; }
+    DIYables_TFT_GC9A01_Round::Frame frame = {{0, 0}, {239, 239}};
+    _tft.setFrame(frame);
+    _tft.beginWrite();
+    uint8_t buf[512];
+    while (f.available()) {
+        int n = f.read(buf, sizeof(buf));
+        if (n > 0) _tft.writeContinue(buf, (size_t)n);
+    }
+    _tft.endWrite();
+    f.close();
+    return true;
+}
 
 bool BaseDisplay::begin() {
     _tft.begin();

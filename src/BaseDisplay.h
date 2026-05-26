@@ -11,6 +11,10 @@ public:
 
     bool begin();
 
+    // Display a 240×240 raw RGB565 image from LittleFS (exactly 115 200 bytes).
+    // Returns false if the file is missing or the wrong size.
+    bool showImage(const char *path);
+
     void showSplash(const String &version, const String &buildDate);
     void showStatus(const String &line1, const String &line2 = "");
     void showError(const String &msg);

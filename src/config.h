@@ -59,6 +59,7 @@
 #define NVS_WIND_STEPS   "wind_steps"
 #define NVS_PRES_STEPS   "pres_steps"
 #define NVS_PWM_FS_MV    "pwm_fs_mv"    // float — SpeedMeter full-scale mV
+#define NVS_BOOT_IMG     "boot_img"     // string — LittleFS path of boot image ("/name.raw")
 
 // ── Calibration reference positions ──────────────────────────────────────────
 #define CAL_WDIR_DEG     0.0f    // North — wind direction stepper reference
