@@ -80,12 +80,33 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert an image to 240x240 RGB565 raw format for the Tjofia WX display.",
     )
-    parser.add_argument("input",            help="Source image (JPEG, PNG, HEIC, BMP, ...)")
+    parser.add_argument("input",  nargs="?",  help="Source image (JPEG, PNG, HEIC, BMP, ...)")
     parser.add_argument("output", nargs="?", help="Output .raw file (default: <input>.raw)")
     parser.add_argument("--preview", action="store_true",
                         help="Open preview and confirm before saving")
     args = parser.parse_args()
-    convert(args.input, args.output, args.preview)
+
+    src = args.input
+    if not src:
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            src = filedialog.askopenfilename(
+                title="Select image to convert",
+                filetypes=[
+                    ("Image files", "*.jpg *.jpeg *.png *.bmp *.gif *.tiff *.tif *.webp *.heic"),
+                    ("All files",   "*.*"),
+                ],
+            )
+            root.destroy()
+        except Exception:
+            parser.error("no input file specified and file dialog unavailable")
+        if not src:
+            sys.exit(0)   # user cancelled
+
+    convert(src, args.output, args.preview)
 
 
 if __name__ == "__main__":
