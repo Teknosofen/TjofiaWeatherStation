@@ -578,6 +578,7 @@ void setup() {
     if (!clockDisp.begin())   Serial.println("Display 1 init failed");
     if (!weatherDisp.begin()) Serial.println("Display 2 init failed");
     clockDisp.showSplash("v" FW_VERSION, __DATE__);
+    weatherDisp.showSplash("v" FW_VERSION, __DATE__);
     delay(2000);
 
     // Self-test: motors sweep ±30°; PWM rides 150 → 200 → 100 → 150 mV simultaneously.
