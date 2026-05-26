@@ -354,6 +354,46 @@ void DIYables_TFT_GC9A01_Round::drawPixel(int16_t x, int16_t y, uint16_t color) 
     write(data, 2);
 }
 
+void DIYables_TFT_GC9A01_Round::drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) {
+    if (w <= 0 || y < 0 || y >= 240) return;
+    if (x < 0)    { w += x; x = 0; }
+    if (x >= 240) return;
+    if (x + w > 240) w = 240 - x;
+    if (w <= 0) return;
+
+    uint8_t data[4];
+
+    writeCommand(COL_ADDR_SET);
+    data[0] = 0; data[1] = (uint8_t)x;
+    data[2] = 0; data[3] = (uint8_t)(x + w - 1);
+    writeData(data, 4);
+
+    writeCommand(ROW_ADDR_SET);
+    data[0] = 0; data[1] = (uint8_t)y;
+    data[2] = 0; data[3] = (uint8_t)y;
+    writeData(data, 4);
+
+    writeCommand(MEM_WR);
+    setDataCommand(1);
+    setChipSelect(0);
+    SPI.beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE0));
+
+    uint8_t hi = color >> 8, lo = color & 0xFF;
+    uint8_t buf[256];
+    int fill = w < 128 ? w : 128;
+    for (int i = 0; i < fill * 2; i += 2) { buf[i] = hi; buf[i + 1] = lo; }
+
+    int remain = w;
+    while (remain > 0) {
+        int chunk = remain > 128 ? 128 : remain;
+        SPI.writeBytes(buf, (size_t)(chunk * 2));
+        remain -= chunk;
+    }
+
+    SPI.endTransaction();
+    setChipSelect(1);
+}
+
 uint16_t DIYables_TFT_GC9A01_Round::colorRGB(uint8_t r, uint8_t g, uint8_t b) {
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }

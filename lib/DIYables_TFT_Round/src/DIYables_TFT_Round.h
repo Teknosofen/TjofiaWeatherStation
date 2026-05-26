@@ -25,6 +25,7 @@ class DIYables_TFT_GC9A01_Round : public Adafruit_GFX {
     void endWrite();
 
     void drawPixel(int16_t x, int16_t y, uint16_t color) override;
+    void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) override;
     void fillScreen(uint16_t color) override;
     void setRotation(uint8_t r) override;
     void invertDisplay(bool i) override;

@@ -29,12 +29,14 @@ void ClockDisplay::drawHand(float angleDeg, int length, int thickness, uint16_t 
     if (thickness <= 1) {
         _tft.drawLine(CX, CY, x2, y2, col);
     } else {
-        for (int d = -(thickness / 2); d <= thickness / 2; d++) {
-            float rp = rad + (float)M_PI_2;
-            int dx = (int)(d * cosf(rp));
-            int dy = (int)(d * sinf(rp));
-            _tft.drawLine(CX + dx, CY + dy, x2 + dx, y2 + dy, col);
-        }
+        float rp   = rad + (float)M_PI_2;
+        float half = thickness / 2.0f;
+        int   dx   = (int)(half * cosf(rp));
+        int   dy   = (int)(half * sinf(rp));
+        // Draw hand as a filled parallelogram (two triangles).
+        // fillTriangle uses drawFastHLine scan-lines — one SPI burst per row.
+        _tft.fillTriangle(CX + dx, CY + dy, CX - dx, CY - dy, x2 + dx, y2 + dy, col);
+        _tft.fillTriangle(CX - dx, CY - dy, x2 + dx, y2 + dy, x2 - dx, y2 - dy, col);
     }
 }
 
@@ -74,34 +76,38 @@ void ClockDisplay::drawClock(int hour, int minute, int second) {
     float minAngle  = minute * 6.0f + second * 0.1f;
     float hourAngle = (hour % 12) * 30.0f + minute * 0.5f;
 
-    auto epX = [](float a, int r) {
-        return CX + (int)(r * cosf((a - 90.0f) * (float)M_PI / 180.0f));
-    };
-    auto epY = [](float a, int r) {
-        return CY + (int)(r * sinf((a - 90.0f) * (float)M_PI / 180.0f));
-    };
-
-    bool redrawHour = true, redrawMin = true;
-
     if (_lastS >= 0) {
         float oldSec  = _lastS * 6.0f;
         float oldMin  = _lastM * 6.0f + _lastS * 0.1f;
         float oldHour = (_lastH % 12) * 30.0f + _lastM * 0.5f;
 
-        redrawMin  = (epX(oldMin,  80) != epX(minAngle,  80) ||
-                      epY(oldMin,  80) != epY(minAngle,  80));
-        redrawHour = (epX(oldHour, 55) != epX(hourAngle, 55) ||
-                      epY(oldHour, 55) != epY(hourAngle, 55));
+        auto epX = [](float a, int r) {
+            return CX + (int)(r * cosf((a - 90.0f) * (float)M_PI / 180.0f));
+        };
+        auto epY = [](float a, int r) {
+            return CY + (int)(r * sinf((a - 90.0f) * (float)M_PI / 180.0f));
+        };
 
+        bool hourMoved = (epX(oldHour, 55) != epX(hourAngle, 55) ||
+                          epY(oldHour, 55) != epY(hourAngle, 55));
+        bool minMoved  = (epX(oldMin,  80) != epX(minAngle,  80) ||
+                          epY(oldMin,  80) != epY(minAngle,  80));
+
+        // Erase old second hand first.
         eraseHand(oldSec,          95, 1);
         eraseHand(oldSec + 180.0f, 20, 1);
-        if (redrawMin)  eraseHand(oldMin,  80, 5);
-        if (redrawHour) eraseHand(oldHour, 55, 7);
+
+        // Only erase hour/min when they actually moved; if unchanged, the
+        // redraw below (same pixels, white) repairs any second-hand damage.
+        if (hourMoved) eraseHand(oldHour, 55, 7);
+        if (minMoved)  eraseHand(oldMin,  80, 5);
     }
 
-    if (redrawHour) drawHand(hourAngle, 55, 7, COL_FACE);
-    if (redrawMin)  drawHand(minAngle,  80, 5, COL_FACE);
-    drawHand(secAngle, 95, 1, COL_SEC);
+    // Always redraw hour and min BEFORE the second hand so the second hand
+    // is visually on top and repairs any gaps left by erasing it.
+    drawHand(hourAngle, 55, 7, COL_FACE);
+    drawHand(minAngle,  80, 5, COL_FACE);
+    drawHand(secAngle,  95, 1, COL_SEC);
 
     float tailRad = (secAngle + 90.0f) * (float)M_PI / 180.0f;
     _tft.drawLine(CX, CY,
