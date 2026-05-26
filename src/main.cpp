@@ -514,7 +514,6 @@ static bool startWifi() {
     wm.setTitle("Tjofia Weather Station");
 
     clockDisp.showAPMode(AP_SSID);
-    weatherDisp.showAPMode(AP_SSID);
     bool connected = (strlen(AP_PASS) > 0)
         ? wm.autoConnect(AP_SSID, AP_PASS)
         : wm.autoConnect(AP_SSID);
@@ -579,7 +578,6 @@ void setup() {
     if (!clockDisp.begin())   Serial.println("Display 1 init failed");
     if (!weatherDisp.begin()) Serial.println("Display 2 init failed");
     clockDisp.showSplash("v" FW_VERSION, __DATE__);
-    weatherDisp.showSplash("v" FW_VERSION, __DATE__);
     delay(2000);
 
     // Self-test: motors sweep ±30°; PWM rides 150 → 200 → 100 → 150 mV simultaneously.
@@ -624,7 +622,6 @@ void loop() {
         Serial.printf("WiFi: %s  IP: %s\n",
                       WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
         clockDisp.showStatus(WiFi.SSID(), WiFi.localIP().toString());
-        weatherDisp.showStatus(WiFi.SSID(), WiFi.localIP().toString());
         delay(1000);
         state = State::LOCATING;
         break;
@@ -632,7 +629,6 @@ void loop() {
 
     case State::LOCATING: {
         clockDisp.showStatus("Finding", "location...");
-        weatherDisp.showStatus("Finding", "location...");
 
         prefs.begin(NVS_NS, true);
         float cachedLat = prefs.getFloat(NVS_LAT, 0);
@@ -685,7 +681,6 @@ void loop() {
 
     case State::SYNCING_TIME: {
         clockDisp.showStatus("Syncing", "time...");
-        weatherDisp.showStatus("Syncing", "time...");
         timeReady = syncTime(geoInfo.utcOffset);
         if (!timeReady) Serial.println("NTP sync failed");
         state = State::FETCHING_WEATHER;
@@ -694,7 +689,6 @@ void loop() {
 
     case State::FETCHING_WEATHER: {
         clockDisp.showStatus("Fetching", "weather...");
-        weatherDisp.showStatus("Fetching", "weather...");
 
         if (!owmKey.isEmpty() && geoInfo.valid) {
             bool ok = weather.fetchWeather(geoInfo.lat, geoInfo.lon, owmKey, weatherData);
