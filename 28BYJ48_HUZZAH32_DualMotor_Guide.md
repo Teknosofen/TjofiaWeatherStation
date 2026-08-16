@@ -3,6 +3,133 @@
 
 ---
 
+## Quick Start
+
+This section gets a freshly flashed TjofiaWX station running in about five minutes.
+The detailed reference sections that follow cover wiring, pin assignments, and
+firmware internals.
+
+### What you need
+
+| Item | Notes |
+|---|---|
+| Assembled TjofiaWX hardware | HUZZAH32 + both GC9A01 displays + stepper gauges + PWM meter wired per §2–§5 |
+| USB cable or 5V supply | HUZZAH32 USB for power; stepper motors need a separate 5V rail |
+| Home WiFi network | 2.4 GHz band; WPA/WPA2 personal |
+| OpenWeatherMap API key | Free account at [openweathermap.org](https://openweathermap.org) → My Profile → API keys |
+| Phone, tablet, or laptop | Any device with a browser; must support WiFi |
+
+---
+
+### Step 1 — Power on
+
+Apply power. Both circular displays show the **Teknosofen splash** (project name,
+firmware version, build date). After ≈ 2 seconds the startup self-test moves all
+instrument needles briefly and the clock display transitions to the WiFi setup screen.
+
+**If WiFi credentials are already saved** the device connects directly and you
+can skip to Step 5.
+
+---
+
+### Step 2 — Connect to the setup hotspot
+
+The clock display shows four lines:
+
+```
+WiFi Setup
+Connect to:
+TjofiaWX-Setup
+192.168.4.1
+```
+
+On your phone or laptop, open the WiFi settings list and connect to
+**TjofiaWX-Setup** (open network — no password required). Then open a browser
+and go to **http://192.168.4.1** — a setup page loads.
+
+---
+
+### Step 3 — Enter WiFi credentials and OWM key
+
+The setup page lists nearby WiFi networks. Select your home network, enter its
+password, and paste your **OpenWeatherMap API key** into the field at the bottom.
+Tap **Save**. The device connects to your home network; the setup hotspot closes.
+
+> **Can't see a network?** Tap *Scan* or scroll down — the list auto-refreshes.
+> The HUZZAH32 only supports 2.4 GHz; 5 GHz networks will not appear.
+
+---
+
+### Step 4 — Read the IP address from the clock display
+
+Once connected to your home network the clock display shows two lines:
+
+```
+YourNetworkName
+192.168.x.x
+```
+
+**Line 1** is the name (SSID) of your home WiFi.
+**Line 2** is the IP address the router assigned to TjofiaWX.
+
+Make a note of the IP address — it lets you reach the web portal from any browser
+on the same network even if mDNS is not available.
+
+The display then steps through *NTP syncing…*, *Locating…*, and *Fetching weather…*
+before the analogue clock face appears and the weather panel shows live data.
+
+---
+
+### Step 5 — Open the web portal
+
+From any browser on your home network, open one of:
+
+| Address | When to use |
+|---|---|
+| `http://TjofiaWX.local` | Works on macOS, iOS, Windows 10 1903+; may not work on Android |
+| `http://192.168.x.x` | Always works — use the IP shown on the clock display in Step 4 |
+
+The portal home page shows four large buttons:
+
+| Button | Page | What you do there |
+|---|---|---|
+| ☁ Weather | `/wx` | View live data; update or change the OWM API key |
+| 📍 Set Location | `/location` | Pin exact lat/lon on a map for precise local weather |
+| ⚙ Calibration | `/calib` | Calibrate the stepper gauges and speed meter |
+| 🖼 Images | `/images` | Upload photos that cycle on the weather display |
+
+---
+
+### Step 6 — (Optional) Pin your location
+
+IP geolocation resolves to the ISP's exchange, which can be tens of kilometres
+from the device. For accurate local weather data, open the portal and tap
+**📍 Set Location**:
+
+1. The map opens centred on the auto-detected position.
+2. Click the map or drag the pin to your exact location.
+3. Tap **Use my GPS** on a phone to jump the map to your GPS position.
+4. Tap **Save & pin** — a new weather fetch starts within 30 seconds.
+
+---
+
+### Step 7 — Done
+
+| Display | What you see | Update rate |
+|---|---|---|
+| Clock (left) | Analogue clock face + today's date below centre | Every second |
+| Weather (right) | Temperature, feels-like, wind direction & speed, pressure, humidity | Every 10 minutes |
+
+The weather display also cycles through any uploaded photos: weather panel →
+photo 1 → weather panel → photo 2 → … (default interval 10 s, adjustable on
+the Images page).
+
+If the clock display ever shows **No weather data / Check setup**, open
+`http://TjofiaWX.local/wx`, verify the OWM key, and check that the device has
+internet access.
+
+---
+
 ## 1. Overview
 
 This guide covers control of two 28BYJ-48 stepper motors from an Adafruit HUZZAH32
@@ -36,12 +163,12 @@ The HUZZAH32 uses an ESP32-WROOM32 module. Some board pins carry alternate label
 | D15 | 15 | Display 1 CS | Clock face display — chip select |
 | D13 | 13 | Display DC | Data/command — shared by both displays |
 | A5 | 4 | Display RST | Reset — shared by both displays (wired together) |
-| 21 | 21 | Display 2 CS | Weather display — chip select (`TFT2_CS`) |
+| 23 | 23 | Display 2 CS | Weather display — chip select (`TFT2_CS`) |
 | 22 | 22 | PWM speed out | Electrical speed indicator output (`PWM_SPEED_PIN`) |
-| 14 | 14 | Motor 1 — IN1 | Wind gauge |
-| 27 | 27 | Motor 1 — IN2 | Wind gauge |
-| 32 | 32 | Motor 1 — IN3 | Wind gauge |
-| 33 | 33 | Motor 1 — IN4 | Wind gauge |
+| 14 | 14 | Motor 1 — IN1 | Wind direction gauge |
+| 27 | 27 | Motor 1 — IN2 | Wind direction gauge |
+| 32 | 32 | Motor 1 — IN3 | Wind direction gauge |
+| 33 | 33 | Motor 1 — IN4 | Wind direction gauge |
 | A1 | 25 | Motor 2 — IN1 | Pressure gauge — board label A1, actual GPIO 25 |
 | A0 | 26 | Motor 2 — IN2 | Pressure gauge — board label A0, actual GPIO 26 |
 | RX | 16 | Motor 2 — IN3 | Pressure gauge — safe if Serial1 unused |
@@ -68,10 +195,10 @@ lines. Only the CS pin differs:
 | MOSI | GPIO 18 | — | — |
 | DC | GPIO 13 | — | — |
 | RST | GPIO 4 | — | — |
-| CS | — | GPIO 15 | GPIO 21 |
+| CS | — | GPIO 15 | GPIO 23 |
 
 Wire the second display's CLK, MOSI, DC, and RST to the **same** board pins as
-the first display. Connect only CS to GPIO 21.
+the first display. Connect only CS to GPIO 23.
 
 **Initialisation order matters:** `clockDisp.begin()` is called first — this drives
 the shared RST line and resets both displays simultaneously. `weatherDisp.begin()`
@@ -120,7 +247,7 @@ Motor 1 and Motor 2.
 
 ## 5. Full Wiring Summary
 
-**Motor 1 (Wind gauge)**
+**Motor 1 (Wind direction gauge)**
 
 | HUZZAH32 label | GPIO # | ULN2003A #1 | Motor 1 wire |
 |---|---|---|---|
@@ -163,7 +290,7 @@ Motor 1 and Motor 2.
 | HUZZAH32 label | GPIO # | Connect to | Display |
 |---|---|---|---|
 | D15 | 15 | CS | Display 1 — clock face |
-| 21 | 21 | CS | Display 2 — weather panel |
+| 23 | 23 | CS | Display 2 — weather panel |
 
 ---
 
@@ -270,6 +397,7 @@ The firmware runs a permanent web portal. Two ways to reach it:
 | `/wx` | Status — live weather, time, location, gauge steps, speed meter, calibration toggle |
 | `/location` | Map-based location pin — set lat/lon manually |
 | `/calib` | Calibration — set speed meter full-scale voltage (more options coming) |
+| `/images` | Image gallery — upload photos for the weather display boot screen; browser converts any format to RGB565 automatically |
 | `/reset` | Clears saved WiFi credentials and restarts (confirmation prompt) |
 
 **First boot (no saved WiFi credentials):**
@@ -365,6 +493,80 @@ Location: Råby, Sweden (60.1000, 16.3667)  tz offset +7200 s
 NTP sync: offset +7200 s → POSIX "UTC-2"
 ```
 
+### 7.5 Boot image (weather display)
+
+The `/images` page lets you upload a photo that appears on the weather display at
+startup instead of the Teknosofen splash. The conversion from any photo format to
+240×240 RGB565 happens entirely in the browser — no Python, no PC tool, no
+pre-processing step needed.
+
+**Uploading a photo:**
+
+| Step | Action |
+|---|---|
+| 1 | Open `http://TjofiaWX.local/images` |
+| 2 | Tap **Choose photo** and pick any JPEG, PNG, HEIC, BMP, etc. |
+| 3 | A circular 240×240 preview appears instantly (centre-crop + resize done in the browser) |
+| 4 | Tap **Convert & Upload** — the browser encodes RGB565 big-endian and POSTs 115,200 bytes directly to the device |
+| 5 | The gallery updates; tap **Set as boot** to use the image at next power-on |
+
+**Gallery management:**
+
+- Each stored image is shown as a circular 80×80 thumbnail (decoded from raw RGB565 by the same browser canvas)
+- **Set as boot** — marks the image as the startup image; path stored in NVS (`boot_img` key)
+- **Delete** — removes the file from LittleFS; clears boot-image NVS key if it pointed to that file
+- **Clear (use splash)** — reverts to the Teknosofen splash without deleting any image
+
+**Auto-selection:**
+
+If no boot image is pinned in NVS, the firmware scans LittleFS on every boot and
+uses the first `.raw` file it finds. Pin an explicit boot image with **Set as boot**
+to make the choice deterministic when multiple images are stored.
+
+**Storage limits:**
+
+Images are stored as raw 240×240 RGB565 big-endian files (115,200 bytes each). The
+LittleFS partition is 1 MB — this allows up to ~8 images with headroom for the
+filesystem metadata. Any upload whose final size is not exactly 115,200 bytes is
+deleted again and reported as a failure, so a truncated transfer cannot leave a
+corrupt file in the gallery.
+
+### 7.6 Slideshow (weather display)
+
+With at least one stored image, the weather display alternates between live
+weather and the gallery:
+
+```
+weather → photo 1 → weather → photo 2 → … → weather → photo N → weather → photo 1 → …
+```
+
+Each slide stays up for the interval set at the bottom of `/images` (1–300 s,
+default 10 s, stored in NVS under `slide_sec`).
+
+Timing is owned by the `Slideshow` class:
+
+- It does nothing until the **first successful weather fetch** calls `start()`, so
+  the boot image stays on screen through WiFi setup, geolocation and NTP sync.
+- Every fresh weather fetch forces the weather slide back on screen and restarts
+  the dwell timer, so newly fetched data is always visible for a full interval.
+- Saving a new interval restarts the timer immediately rather than at the end of
+  the current slide.
+- It is skipped entirely while calibration mode or the gauge wizard is active,
+  and resumes when either hands control back.
+
+**Alternative (PC-based conversion):**
+
+`tools/convert_image.py` (Pillow required) still works for cases where the browser
+cannot decode a particular format (some HEIC files on Android). It produces an
+identical `.raw` file that can be uploaded via the same `/images` page:
+
+```bash
+python tools/convert_image.py photo.jpg          # saves photo.raw
+python tools/convert_image.py photo.jpg --preview  # preview before saving
+```
+
+Run without arguments on Windows/macOS to open a file picker dialog.
+
 ---
 
 ## 8. Half-Step Sequence
@@ -390,23 +592,94 @@ driven by IN1–IN4.
 The firmware is a PlatformIO project targeting the `featheresp32` board. Key source
 files:
 
+**Hardware drivers**
+
 | File | Purpose |
 |---|---|
 | `src/Stepper28BYJ.h` | Low-level half-step driver — one instance per motor |
 | `src/Instruments.h/cpp` | `StepperGauge` and `Instruments` — position-aware gauge abstraction |
-| `src/config.h` | All pin assignments, gauge limits, timing constants |
+| `src/SpeedMeter.h/cpp` | 12-bit LEDC PWM driver for the analog wind-speed meter panel |
 | `src/BaseDisplay.h/cpp` | Abstract base — owns `_tft`, bezel, boot screens (splash/status/error/AP) |
 | `src/ClockDisplay.h/cpp` | Extends `BaseDisplay` — analogue clock face, hands, centre temperature |
 | `src/WeatherDisplay.h/cpp` | Extends `BaseDisplay` — weather data panel (temp, wind, pressure, humidity) |
 | `src/DisplayManager.h` | Thin alias: `typedef ClockDisplay DisplayManager` (kept for compatibility) |
-| `src/SpeedMeter.h/cpp` | 12-bit LEDC PWM driver for the analog wind-speed meter panel |
+
+**Services**
+
+| File | Purpose |
+|---|---|
+| `src/Settings.h/cpp` | The only owner of NVS — one named accessor per persisted value |
+| `src/ImageStore.h/cpp` | LittleFS `.raw` gallery: enumerate, delete, stream, upload sink |
+| `src/TimeService.h/cpp` | NTP sync (POSIX tz string construction) and local-clock readout |
+| `src/Slideshow.h/cpp` | Weather ⇄ photo rotation on the weather display |
+| `src/GaugeCalWizard.h/cpp` | Two-point stepper calibration state machine and linear fit |
 | `src/WeatherClient.h/cpp` | IP geolocation + OpenWeatherMap fetch + Nominatim reverse geocoding |
-| `src/main.cpp` | State-machine entry point |
-| `src/demo/main.cpp` | Motor test sketch (see §11) |
+| `src/NetPortal.h/cpp` | WiFiManager credential portal, persistent soft-AP, captive DNS, mDNS |
+
+**Web interface**
+
+| File | Purpose |
+|---|---|
+| `src/WebUI.h/cpp` | Owns the `WebServer`, shared page chrome (`pageHead`, `redirect`), route wiring |
+| `src/WebPages.h` | One `register*()` declaration per page group |
+| `src/WebPageHome.cpp` | `/` · `/save` · `/cal` · `/reset` |
+| `src/WebPageStatus.cpp` | `/wx` status table |
+| `src/WebPageLocation.cpp` | `/location*` Leaflet map pin |
+| `src/WebPageCalib.cpp` | `/calib*` reference position, gauge wizard, speed-meter full scale |
+| `src/WebPageImages.cpp` | `/images*` gallery, browser-side converter/upload, boot image, slideshow |
+
+**Top level**
+
+| File | Purpose |
+|---|---|
+| `src/config.h` | All pin assignments, gauge limits, NVS keys, timing constants |
+| `src/AppContext.h/cpp` | The single `app` object: module instances, live state, shared actions |
+| `src/main.cpp` | Boot sequence and top-level state machine — nothing else |
 
 **Stepper28BYJ** is self-contained — no external stepper library needed.
 **StepperGauge** wraps it with a value-to-steps mapping and tracks the current
 needle position so only the delta is driven on each update.
+
+### 9.0 Module layering
+
+`main.cpp` holds only `setup()`, `loop()` and the boot state machine. Everything
+else is a module with one responsibility, wired together through a single shared
+object.
+
+```
+main.cpp          setup() + loop() + State{BOOT…RUNNING}
+   │
+   ├── AppContext  ── the one `app` global: owns every module instance,
+   │                  the live GeoInfo/WeatherData, and the actions the
+   │                  web layer triggers (applyCalMode, refreshAfterCalib,
+   │                  saveGaugePositions, scheduleWeatherRefresh…)
+   │
+   ├── NetPortal   ── WiFi → soft-AP → DNS → mDNS → WebUI::begin()
+   │      └── WebUI ── WebServer + page chrome
+   │             └── WebPage*.cpp  (each registers its own routes)
+   │
+   └── services: Settings · ImageStore · TimeService · Slideshow ·
+                 GaugeCalWizard · WeatherClient
+       drivers:  Instruments · SpeedMeter · Clock/WeatherDisplay
+```
+
+Two rules keep the layering honest and are worth preserving:
+
+- **`Settings` is the only file that touches `Preferences`/NVS**, and
+  **`ImageStore` is the only file that enumerates LittleFS.** (`BaseDisplay`
+  still opens an image file directly to render it — that is rendering, not
+  storage management.) Every raw `NVS_*` key from `config.h` is referenced
+  from `Settings.cpp` alone.
+- **Web handlers never block on hardware they can defer.** Toggling the
+  reference position posts to `/cal`, which only records the request via
+  `AppContext::requestCalMode()`; `loop()` picks it up and drives the motors
+  after the HTTP response has gone out. Motor moves take seconds — doing them
+  inside a handler would stall the web server.
+
+Long-running gauge ownership is arbitrated through two flags: `app.calMode`
+(needles parked at reference values) and `app.gaugeCal.active()` (the wizard
+holds the needles). While either is set, weather fetches still run and are
+logged, but the gauges and the slideshow are left untouched.
 
 ### 9.1 Display driver and dual-display architecture
 
@@ -432,7 +705,7 @@ Two instances live in `main.cpp`:
 
 ```cpp
 static ClockDisplay   clockDisp(TFT_CS);      // CS=15, RST=4 (drives shared RST)
-static WeatherDisplay weatherDisp(TFT2_CS);   // CS=21, rst=-1 (no RST toggle)
+static WeatherDisplay weatherDisp(TFT2_CS);   // CS=23, rst=-1 (no RST toggle)
 ```
 
 **Shared RST initialisation order:**
@@ -478,16 +751,39 @@ lib_deps =
 **Stepper gauges**
 
 ```cpp
-// Motor 1 – wind speed: 0–60 knots → 0 to 3/4 revolution
-#define WIND_MIN_KT      0.0f
-#define WIND_MAX_KT     60.0f
-#define WIND_MAX_STEPS  (STEPS_PER_REV * 3 / 4)   // 3072 steps
+// Motor 1 – wind direction: circular dial, 0–360° = one full output-shaft turn
+#define WDIR_MIN_DEG     0.0f
+#define WDIR_MAX_DEG   360.0f
+#define WDIR_MAX_STEPS  STEPS_PER_REV             // 4096 steps = 360° of compass
 
 // Motor 2 – pressure: 960–1040 hPa → 0 to 3/4 revolution
 #define PRES_MIN_HPA   960.0f
 #define PRES_MAX_HPA  1040.0f
 #define PRES_MAX_STEPS (STEPS_PER_REV * 3 / 4)    // 3072 steps
 ```
+
+**These constants are factory defaults, not limits.** `_maxSteps` seeds the
+default gain (steps per unit) and nothing else — the step position is never
+clamped to it:
+
+- `StepperGauge::valueToSteps()` returns the raw calibrated target. It used to
+  cap the result at `_maxSteps`, which froze a needle at 3072 steps as soon as
+  a calibrated gain asked for more.
+- `StepperGauge::nudge()` has no end stop, so the calibration wizard can drive a
+  needle anywhere on the dial, past full scale and across several revolutions.
+- `_pos` free-runs and is persisted as-is. It is never wrapped or clamped.
+
+Motor 1 is constructed with `circular = true`. A circular gauge takes the
+**shortest arc** to its target: current and target positions are reduced modulo
+one full scale, and the difference is wrapped to ±½ scale, so the needle never
+unwinds the long way round from 350° to 10°. The modulus is derived from the
+*calibrated* gain (`stepsPerUnit × (max − min)`), not from `_maxSteps`, so a
+re-calibrated dial wraps at its true revolution.
+
+> Because motor 1 is a full-circle compass, `WDIR_MAX_STEPS` is a whole
+> revolution (4096). It was `STEPS_PER_REV * 3 / 4` while motor 1 still drove a
+> 270° wind-*speed* arc; leaving it at 3072 made an uncalibrated compass wrap
+> after ¾ of a turn. A stored calibration in NVS overrides the default either way.
 
 **PWM wind speed meter (`SpeedMeter` class, GPIO22)**
 
@@ -543,6 +839,24 @@ without moving the motors. The needles stay physically where they were when powe
 was cut; the firmware resumes with correct delta tracking from the first new
 weather fetch.
 
+**Persisted values (NVS namespace `tjofia`)**
+
+Every one of these is read and written exclusively through `Settings`; the key
+names themselves live in `config.h` and appear nowhere else but `Settings.cpp`.
+
+| Key | Type | Written by | Meaning |
+|---|---|---|---|
+| `wind_steps` / `pres_steps` | int | weather update, cal-mode change, wizard exit | last known needle positions |
+| `wdir_zero` / `wdir_gain` | float | gauge wizard | wind-direction calibration (steps at 0°, steps per °) |
+| `pres_zero` / `pres_gain` | float | gauge wizard | pressure calibration (steps at 960 hPa, steps per hPa) |
+| `pwm_fs_mv` | float | `/calib` | speed-meter full-scale voltage |
+| `owm_key` | string | `/save`, WiFiManager portal | OpenWeatherMap API key |
+| `lat` / `lon` | float | geolocation, `/location/save` | station coordinates |
+| `loc_pinned` | bool | `/location/save`, `/location/clear` | ignore IP geolocation for coordinates |
+| `timezone` / `utc_off` | string / int | geolocation | tz name and UTC offset in seconds |
+| `boot_img` | string | `/images/setboot` | pinned boot image path |
+| `slide_sec` | int | `/images/slide-save` | slideshow interval in seconds |
+
 **Wind speed tracking**
 
 After each successful weather fetch `SpeedMeter::setKnots()` is called with the
@@ -555,20 +869,51 @@ duty = (knots / 30.0) × (fullScaleMv / 3300.0) × 4095
 The `/wx` status page shows the current output in mV, the equivalent knots, and the
 calibrated full-scale value.
 
-**Calibration mode (stepper gauges)**
+**Calibration mode (reference position)**
 
-Accessible from the `/wx` status page. When enabled, both stepper gauges move to
-fixed reference positions (≈19.4 kn / 1000 hPa) and the speed meter is also driven
-to the same reference wind speed. Step counts are persisted to NVS; the speed meter
-position is not persisted (it is always derived from weather data or the reference
-value on enable/disable). Live weather updates are suppressed while active.
+The checkbox at the top of `/calib`. When enabled, both stepper gauges move to
+fixed reference positions (North / 1000 hPa, from `CAL_WDIR_DEG` and
+`CAL_PRES_HPA`) and the speed meter is driven to `CAL_WIND_MS`. Step counts are
+persisted to NVS; the speed meter position is not persisted (it is always derived
+from weather data or the reference value on enable/disable). Live gauge updates
+are suppressed while active.
 
-**Speed meter calibration page (`/calib`)**
+The POST handler does **not** move the motors — it calls
+`AppContext::requestCalMode()` and returns immediately, and `loop()` performs the
+move on the next pass. Otherwise the browser would wait out a multi-second
+stepper run.
 
-Accessible from the main config page. Allows setting the full-scale voltage (mV) —
-the output that drives the meter to full-scale (30 kn) deflection. The value is
-stored in NVS (`pwm_fs_mv`) and applied immediately without restart. More calibration
-options will be added to this page in future firmware revisions.
+**Gauge calibration wizard (`/calib`)**
+
+Two-point linear calibration, one gauge at a time, implemented by
+`GaugeCalWizard`. The operator nudges the needle to a printed mark (±1 / ±10 /
+±100 / ±1000 steps, over AJAX so the page does not reload), types the value that
+mark represents, and repeats for a second mark. From the two (steps, value) pairs
+the wizard derives:
+
+```
+gain = (steps₂ − steps₁) / (value₂ − value₁)          // steps per unit
+zero = steps₁ − gain × (value₁ − scaleMinimum)        // steps at scale minimum
+```
+
+Pairs that would give a zero or negative gain are rejected and logged. Accepted
+coefficients go to NVS (`wdir_zero`/`wdir_gain`, `pres_zero`/`pres_gain`) and are
+reloaded on boot; **Reset** discards them and restores the factory gain derived
+from `*_MAX_STEPS`. On boot a stored gain more than 2.5× or less than 0.4× the
+factory value is flagged on the serial console — it usually means a mis-clicked
+wizard rather than an unusual dial.
+
+While the wizard is active the reference-position checkbox is disabled and the
+weather fetch leaves the gauges alone. The **Back** button posts to
+`/calib/gc-back`, which cancels the wizard before navigating home — otherwise the
+gauges would stay frozen.
+
+**Speed meter calibration (`/calib`)**
+
+Sets the full-scale voltage (mV) — the output that drives the meter to full-scale
+(30 kn) deflection. Accepted range 50–3300 mV. The value is stored in NVS
+(`pwm_fs_mv`) and applied immediately without restart; the needle re-deflects to
+the current wind speed as soon as it is saved.
 
 ### 9.4 Display rendering
 
@@ -642,99 +987,9 @@ side (3 total); minute ticks get one additional line (2 total).
 - **Share GND** between the ESP32, both ULN2003A chips, the motors, and the 5V
   supply.
 - **4096 half-steps = 360°** of the output shaft (internal 1:64 gear already included).
-  2048 = 180°. 341 ≈ 30°. Full gauge scale (270°) = 3072 steps ≈ 15 s at 5 ms/step.
+  2048 = 180°. 1024 = 90°. 341 ≈ 30°. A full revolution takes ≈ 20 s at 5 ms/step,
+  a 270° arc (3072 steps) ≈ 15 s.
 - **Reliable step delay is 3–5 ms.** Default in `Stepper28BYJ.h` is 5 ms. 3 ms works
   on confirmed hardware; do not go below 2 ms.
 - **GPIO 16 and 17** (board labels RX/TX) are used for Motor 2. If you later need
   the hardware Serial1 port, reassign those motor pins to other free GPIOs.
-
----
-
-## 11. Demo / Motor-Test Mode
-
-The project includes a dedicated PlatformIO environment (`demo`) that exercises both
-stepper motors through a three-phase test sequence without requiring WiFi, a working
-display, or an OpenWeatherMap key. Use it to verify wiring and motor function before
-final assembly.
-
-### 11.1 PlatformIO Environment
-
-The demo is compiled from `src/demo/main.cpp`. `build_src_filter` keeps the demo
-and main firmware completely separate — they share only `config.h` and
-`Stepper28BYJ.h`.
-
-```ini
-; platformio.ini (relevant excerpt)
-
-[env:featheresp32]        ; main weather station firmware
-extends = common
-build_src_filter = +<*> -<demo/>
-lib_deps = ...
-
-[env:demo]                ; motor test — no WiFi or display needed
-extends = common
-build_src_filter = -<*> +<demo/>
-```
-
-To upload the demo from the command line:
-
-```bash
-pio run -e demo -t upload
-```
-
-Or select the **demo** environment in the PlatformIO IDE toolbar before clicking
-Upload.
-
-### 11.2 Pre-flight Requirement
-
-> **Important:** Both motor needles must be at their physical minimum stop (zero
-> position) before uploading the demo. The sequence tracks relative steps only and
-> has no homing routine.
-
-### 11.3 Test Sequence
-
-The demo runs once in `setup()` then idles in `loop()`. Three phases:
-
-| Phase | Description |
-|---|---|
-| **1 — Full-range sweep** | Each motor sweeps CW from zero to its maximum gauge position (3072 steps, ¾ rev) then returns CCW to zero. Confirms motor runs, wiring is correct, and full needle travel is unobstructed. |
-| **2 — Quarter landmarks** | Both motors step to 25 %, 50 %, 75 %, and 100 % of full scale with a brief pause at each point, then return to zero. Useful for marking gauge face positions. |
-| **3 — Fast oscillation ×5** | Both motors shuttle between zero and mid-scale at a 2 ms step delay (near-maximum speed). Stresses driver chips and coils; check for missed steps or overheating. |
-
-### 11.4 Serial Output
-
-Connect at **115200 baud**. Progress is printed for each phase:
-
-```
-=== Motor demo ===
-Both needles should be at physical zero before flashing.
-
--- Phase 1: full range --
-[wind] sweep CW  3072 steps
-[wind] sweep CCW 3072 steps
-[pres] sweep CW  3072 steps
-[pres] sweep CCW 3072 steps
-
--- Phase 2: 25 / 50 / 75 / 100 % landmarks --
-  25%
-  50%
-  75%
-  100%
-
--- Phase 3: fast oscillation (5x) --
-
-Demo complete. Needles should be at zero.
-```
-
-If a needle does not return to zero the motor likely missed steps — increase the
-step delay (default 3 ms) or check for power supply sag on the 5V rail.
-
-### 11.5 Switching Between Demo and Main Firmware
-
-| Environment | CLI command | Purpose |
-|---|---|---|
-| `featheresp32` | `pio run -e featheresp32 -t upload` | Full weather station firmware |
-| `demo` | `pio run -e demo -t upload` | Motor test only |
-
-After testing, upload `featheresp32` to restore the full firmware. The two
-environments are independent — neither overwrites the other's source files.
