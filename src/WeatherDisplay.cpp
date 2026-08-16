@@ -17,12 +17,9 @@ const char *WeatherDisplay::degToCompass(int deg) {
 }
 
 void WeatherDisplay::drawWindCompass(int cx, int cy, int r, int deg) {
-    // fillCircle outside-in leaves 1-px coloured rings, same as drawCircle
-    // but uses drawFastHLine bursts — much faster for r~30.
-    _tft.fillCircle(cx, cy, r + 1, 0x630C);
-    _tft.fillCircle(cx, cy, r,     COL_FACE);
-    _tft.fillCircle(cx, cy, r - 1, 0xC618);
-    _tft.fillCircle(cx, cy, r - 2, COL_BG);   // restore interior
+    _tft.drawCircle(cx, cy, r + 1, 0x630C);
+    _tft.drawCircle(cx, cy, r,     COL_FACE);
+    _tft.drawCircle(cx, cy, r - 1, 0xC618);
 
     // Cardinal labels — built-in 6×8 font, placed just inside the ring.
     _tft.setFont(nullptr);
@@ -48,7 +45,8 @@ void WeatherDisplay::drawWindCompass(int cx, int cy, int r, int deg) {
 
 void WeatherDisplay::update(const WeatherData &wd) {
     _tft.fillScreen(COL_BG);
-    drawBezel();
+    _tft.drawCircle(CX, CY, R,     0x4208);
+    _tft.drawCircle(CX, CY, R - 1, 0x2104);
 
     if (!wd.valid) {
         _tft.setFont(&FreeSans9pt7b);

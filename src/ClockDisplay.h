@@ -15,6 +15,7 @@ public:
 
 private:
     int  _lastH = -1, _lastM = -1, _lastS = -1;
+    char _dateBuf[12] = {};   // last rendered date string, used for erase pass
     bool _faceDrawn = false;
 
     void resetClockState();

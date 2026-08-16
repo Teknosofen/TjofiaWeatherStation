@@ -1,5 +1,7 @@
 #include "ClockDisplay.h"
 #include <math.h>
+#include <time.h>
+#include <Fonts/FreeSans9pt7b.h>
 
 ClockDisplay::ClockDisplay(int8_t cs, int8_t rst)
     : BaseDisplay(cs, rst) {}
@@ -81,26 +83,10 @@ void ClockDisplay::drawClock(int hour, int minute, int second) {
         float oldMin  = _lastM * 6.0f + _lastS * 0.1f;
         float oldHour = (_lastH % 12) * 30.0f + _lastM * 0.5f;
 
-        auto epX = [](float a, int r) {
-            return CX + (int)(r * cosf((a - 90.0f) * (float)M_PI / 180.0f));
-        };
-        auto epY = [](float a, int r) {
-            return CY + (int)(r * sinf((a - 90.0f) * (float)M_PI / 180.0f));
-        };
-
-        bool hourMoved = (epX(oldHour, 55) != epX(hourAngle, 55) ||
-                          epY(oldHour, 55) != epY(hourAngle, 55));
-        bool minMoved  = (epX(oldMin,  80) != epX(minAngle,  80) ||
-                          epY(oldMin,  80) != epY(minAngle,  80));
-
-        // Erase old second hand first.
         eraseHand(oldSec,          95, 1);
         eraseHand(oldSec + 180.0f, 20, 1);
-
-        // Only erase hour/min when they actually moved; if unchanged, the
-        // redraw below (same pixels, white) repairs any second-hand damage.
-        if (hourMoved) eraseHand(oldHour, 55, 7);
-        if (minMoved)  eraseHand(oldMin,  80, 5);
+        eraseHand(oldHour,         55, 7);
+        eraseHand(oldMin,          80, 5);
     }
 
     // Always redraw hour and min BEFORE the second hand so the second hand
@@ -116,6 +102,39 @@ void ClockDisplay::drawClock(int hour, int minute, int second) {
                   COL_SEC);
 
     _tft.fillCircle(CX, CY, 3, COL_ACCENT);
+
+    // Date label — redrawn every tick because hand-erase strokes pass through this area.
+    // Erase old text first by reprinting it in background colour, then draw new text.
+    {
+        time_t now = time(nullptr);
+        struct tm *ti = localtime(&now);
+        char dateBuf[12];
+        strftime(dateBuf, sizeof(dateBuf), "%a %d %b", ti);   // e.g. "Mon 19 Jul"
+
+        static constexpr int DATE_Y = CY + 38;   // text baseline, just below centre
+        int16_t x1, y1; uint16_t tw, th;
+
+        _tft.setFont(&FreeSans9pt7b);
+        _tft.setTextSize(1);
+
+        bool dateChanged = (strcmp(dateBuf, _dateBuf) != 0);
+        if (dateChanged && _dateBuf[0]) {
+            // Erase old date only when it actually changes (once per day)
+            _tft.getTextBounds(_dateBuf, 0, 0, &x1, &y1, &tw, &th);
+            _tft.setTextColor(COL_BG);
+            _tft.setCursor(CX - (int16_t)(tw / 2), DATE_Y);
+            _tft.print(_dateBuf);
+        }
+
+        // Always redraw — repairs any pixels erased by the second hand
+        _tft.getTextBounds(dateBuf, 0, 0, &x1, &y1, &tw, &th);
+        _tft.setTextColor(0x7BEF);
+        _tft.setCursor(CX - (int16_t)(tw / 2), DATE_Y);
+        _tft.print(dateBuf);
+
+        _tft.setFont(nullptr);
+        if (dateChanged) memcpy(_dateBuf, dateBuf, sizeof(dateBuf));
+    }
 
     _lastH = hour; _lastM = minute; _lastS = second;
 }
