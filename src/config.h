@@ -11,7 +11,7 @@
 #define TFT_BL    -1   // set to GPIO pin if backlight is PWM-controlled
 
 // ── Display 2 (GC9A01, shares SCK/MOSI/DC/RST with display 1) ───────────────
-#define TFT2_CS       21   // board pin "D21" — wire second display CS here
+#define TFT2_CS       23   // board pin "D23" — wire second display CS here
 
 // ── PWM output (electrical speed indicator, future use) ──────────────────────
 #define PWM_SPEED_PIN 22   // board pin "D22" — LEDC PWM output
@@ -60,6 +60,11 @@
 #define NVS_PRES_STEPS   "pres_steps"
 #define NVS_PWM_FS_MV    "pwm_fs_mv"    // float — SpeedMeter full-scale mV
 #define NVS_BOOT_IMG     "boot_img"     // string — LittleFS path of boot image ("/name.raw")
+#define NVS_SLIDE_SEC    "slide_sec"   // int    — weather/image slideshow interval (seconds)
+#define NVS_WDIR_ZERO    "wdir_zero"   // float  — gauge cal: steps at minVal
+#define NVS_WDIR_GAIN    "wdir_gain"   // float  — gauge cal: steps per degree
+#define NVS_PRES_ZERO    "pres_zero"   // float  — gauge cal: steps at minVal
+#define NVS_PRES_GAIN    "pres_gain"   // float  — gauge cal: steps per hPa
 
 // ── Calibration reference positions ──────────────────────────────────────────
 #define CAL_WDIR_DEG     0.0f    // North — wind direction stepper reference
@@ -72,10 +77,11 @@
 #define WIFI_TIMEOUT_S       180                   // AP portal timeout
 
 // ── Gauge physical limits ────────────────────────────────────────────────────
-// Motor 1 – wind direction: 0–360° mapped to 0–(3/4 rev)
+// Motor 1 – wind direction: circular dial, 0–360° = one full output-shaft turn.
+// Factory default only — the calibration wizard overrides the gain from NVS.
 #define WDIR_MIN_DEG     0.0f
 #define WDIR_MAX_DEG   360.0f
-#define WDIR_MAX_STEPS (STEPS_PER_REV * 3 / 4)   // 3072 steps = full compass sweep
+#define WDIR_MAX_STEPS  STEPS_PER_REV            // 4096 steps = 360° of compass
 
 // Motor 2 – pressure:  960–1040 hPa mapped to full scale
 #define PRES_MIN_HPA   960.0f
@@ -83,7 +89,7 @@
 #define PRES_MAX_STEPS (STEPS_PER_REV * 3 / 4)
 
 // ── Firmware identity ────────────────────────────────────────────────────────
-#define FW_VERSION  "1.0"
+#define FW_VERSION  "1.1"
 
 // ── Display colours (RGB565) ─────────────────────────────────────────────────
 #define COL_BG      0x0000   // black
