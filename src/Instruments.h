@@ -4,15 +4,18 @@
 // Position-aware stepper gauge with two-point linear calibration.
 class StepperGauge {
 public:
+    // backlashSteps > 0 enables approach-from-below on a geared gauge; see
+    // approachFromBelow(). 0 = direct drive, move straight to the target.
     StepperGauge(int p1, int p2, int p3, int p4, float minVal, float maxVal, int maxSteps,
-                 bool circular = false)
+                 bool circular = false, int backlashSteps = 0)
         : motor(p1, p2, p3, p4),
           _minVal(minVal), _maxVal(maxVal), _maxSteps(maxSteps),
           _pos(0),
           _zeroSteps(0.0f),
           _stepsPerUnit((float)maxSteps / (maxVal - minVal)),
           _calibrated(false),
-          _circular(circular) {}
+          _circular(circular),
+          _backlashSteps(backlashSteps) {}
 
     // Set assumed position without moving the motor (NVS restore on boot).
     void setPos(int steps);
@@ -20,10 +23,15 @@ public:
 
     // Move needle to represent val.  The step position is not clamped — a
     // circular gauge takes the shortest arc and may accumulate whole revolutions.
+    // On a gauge with backlash compensation this always moves, even when the
+    // needle is already on target (see approachFromBelow()).
     void setValue(float val, int stepDelay = 5);
 
     // Move the motor by delta steps and update the tracked position.
-    // Used during the calibration wizard.
+    // Used during the calibration wizard.  Deliberately uncompensated: the
+    // operator must see the raw needle motion, and must approach each
+    // calibration mark from below so the stored coefficients describe the same
+    // slack state that setValue() reproduces.
     void nudge(int delta, int stepDelay = 5);
 
     // Two-point calibration coefficients.
@@ -46,9 +54,13 @@ private:
     float _stepsPerUnit;  // steps per physical unit (calibration gain)
     bool  _calibrated;
     bool  _circular;      // true → shortest-arc movement, _pos accumulates freely
+    int   _backlashSteps; // 0 = direct drive; >0 = undershoot depth for a geared gauge
 
     int valueToSteps(float val) const;
     int fullScaleSteps() const;   // calibrated steps across the whole value range
+
+    void moveTo(int pos, int stepDelay);              // absolute, leaves coils on
+    void approachFromBelow(int target, int stepDelay);
 };
 
 // Thin wrapper around both gauges.

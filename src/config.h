@@ -88,6 +88,15 @@
 #define PRES_MAX_HPA  1040.0f
 #define PRES_MAX_STEPS (STEPS_PER_REV * 3 / 4)
 
+// Motor 2 drives its needle through a gearbox with 3–4 mBar of lost motion.
+// setValue() undershoots the target by this many steps and then comes back up,
+// so the slack is always taken up in the increasing direction — the direction
+// the gauge is calibrated in.  Only needs to EXCEED the real backlash, so it is
+// not a precision figure: at the factory gain (3072 steps / 80 hPa =
+// 38.4 steps/hPa) 3–4 mBar is 115–154 steps, and 250 leaves ~2.5 hPa of margin.
+// Set to 0 to disable compensation for a direct-drive gauge (motor 1).
+#define PRES_BACKLASH_STEPS  250
+
 // ── Firmware identity ────────────────────────────────────────────────────────
 #define FW_VERSION  "1.1"
 

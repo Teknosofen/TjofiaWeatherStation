@@ -27,7 +27,21 @@ const char CSS[] PROGMEM =
     ".gcrow{display:flex;align-items:center;gap:8px;"
            "padding:8px 0;border-top:1px solid #eee}"
     ".gcrow:first-of-type{border-top:none}"
-    ".gcrow .lbl{flex:1}";
+    ".gcrow .lbl{flex:1}"
+    ".warn{background:#fff8e1;border:1px solid #e6c200;border-radius:4px;"
+         "padding:8px 10px;margin:8px 0;font-size:.85em;color:#5a4a00}";
+
+// Shown in both wizard states. The pressure gauge is geared and has 3–4 mBar of
+// lost motion, so the needle sits in a different place depending on which way it
+// was last driven. setValue() always finishes an increasing move; the operator
+// has to do the same when calibrating, or the stored coefficients describe a
+// slack state the firmware never reproduces.
+const char APPROACH_NOTE[] PROGMEM =
+    "<div class='warn'><b>Approach every mark from below.</b> Finish each "
+    "adjustment with the <b>+</b> buttons — if you overshoot, back off well past "
+    "the mark and come up again. The pressure gauge has ~3&ndash;4 mBar of gear "
+    "backlash and the firmware always drives it upwards onto its target, so the "
+    "calibration is only valid if it was taken the same way.</div>";
 
 constexpr float SPEED_FS_MIN_MV = 50.0f;
 constexpr float SPEED_FS_MAX_MV = 3300.0f;
@@ -64,6 +78,7 @@ void appendWizardIdle(String &p) {
     p += F("<div class='box'><h2>Gauge calibration</h2>"
            "<p><small>Two-point linear calibration: nudge the needle to two known marks, "
            "confirm each &mdash; offset and scale are computed automatically.</small></p>");
+    p += FPSTR(APPROACH_NOTE);
     appendGaugeRow(p, "Wind direction",      true);
     appendGaugeRow(p, "Barometric pressure", false);
     p += F("</div>");
@@ -84,8 +99,9 @@ void appendWizardActive(String &p) {
     p += (ptNum == 1 ? "1" : "2");
     p += F(" of 2</h2>"
            "<p><small>Nudge the needle to a printed mark on the scale, enter the "
-           "value it points to, then confirm.</small></p>"
-           "<p>Position: <b id='gcpos'>");
+           "value it points to, then confirm.</small></p>");
+    p += FPSTR(APPROACH_NOTE);
+    p += F("<p>Position: <b id='gcpos'>");
     p += curPos;
     p += F("</b> steps</p>"
            "<div style='display:flex;flex-wrap:wrap;gap:6px;margin:10px 0'>"

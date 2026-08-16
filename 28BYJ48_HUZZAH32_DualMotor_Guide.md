@@ -773,6 +773,55 @@ clamped to it:
   needle anywhere on the dial, past full scale and across several revolutions.
 - `_pos` free-runs and is persisted as-is. It is never wrapped or clamped.
 
+**Gearbox backlash (motor 2)**
+
+The pressure needle is driven through a gearbox with **3–4 mBar of lost motion**.
+Where the needle physically sits therefore depends on which direction it was
+last driven — the same commanded step count puts it in two different places
+depending on history. At the factory gain (38.4 steps/hPa) that dead zone is
+115–154 steps, and a 1 hPa weather change is only 38 steps, so without
+compensation small pressure movements would not move the needle at all and
+larger ones would arrive late.
+
+`StepperGauge` handles this by **always approaching the target from below**.
+`setValue()` drives to `target − PRES_BACKLASH_STEPS`, then comes back up onto
+the target, so the final leg is always increasing and the slack is always taken
+up the same way:
+
+```cpp
+void StepperGauge::approachFromBelow(int target, int stepDelay) {
+    moveTo(target - _backlashSteps, stepDelay);
+    moveTo(target, stepDelay);              // final leg always increasing
+    motor.off();
+}
+```
+
+Three properties of this scheme are worth understanding:
+
+- **`PRES_BACKLASH_STEPS` only has to exceed the real backlash.** It is not a
+  precision figure — 250 steps against a measured 115–154 leaves ample margin.
+  This is why undershoot is preferred over a model-based directional offset,
+  which would need an accurate backlash figure that in practice varies with
+  angle, load, temperature and wear.
+- **It runs unconditionally** — on upward moves and even when the needle is
+  already on target. That means nothing outside `setValue()` can leave the gear
+  train in the wrong state (the startup self-test and the wizard's `nudge()`
+  both finish wherever they happen to finish, and the slack state after a power
+  cycle is unknowable). It also gives the barometer a visible dip-and-return on
+  every fetch, which is welcome on a gauge whose reading can sit unchanged for
+  hours.
+- **The calibration must be taken the same way.** The stored coefficients
+  describe the needle position with the slack taken up in the increasing
+  direction, so each wizard mark must be approached with the **+** buttons. The
+  `/calib` page says so in both wizard states. `nudge()` is deliberately
+  uncompensated — the operator has to see raw needle motion.
+
+Cost is ~500 extra steps (≈ 2.5 s at 5 ms/step) per fetch, once every 10 minutes.
+
+Motor 1 is direct drive and passes `backlashSteps = 0`, which disables all of the
+above and restores a straight move to target. Set the parameter non-zero on any
+gauge that later acquires a reduction stage.
+
 Motor 1 is constructed with `circular = true`. A circular gauge takes the
 **shortest arc** to its target: current and target positions are reduced modulo
 one full scale, and the difference is wrapped to ±½ scale, so the needle never
@@ -895,6 +944,13 @@ the wizard derives:
 gain = (steps₂ − steps₁) / (value₂ − value₁)          // steps per unit
 zero = steps₁ − gain × (value₁ − scaleMinimum)        // steps at scale minimum
 ```
+
+> **Approach every mark from below.** Finish each adjustment with the **+**
+> buttons; if you overshoot, back off well past the mark and come up again. The
+> pressure gauge has 3–4 mBar of gear backlash and the firmware always drives it
+> upwards onto its target, so a calibration taken on a descending approach
+> describes a needle position the firmware never reproduces. The `/calib` page
+> repeats this warning in both wizard states.
 
 Pairs that would give a zero or negative gain are rejected and logged. Accepted
 coefficients go to NVS (`wdir_zero`/`wdir_gain`, `pres_zero`/`pres_gain`) and are
