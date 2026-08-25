@@ -88,14 +88,30 @@
 #define PRES_MAX_HPA  1040.0f
 #define PRES_MAX_STEPS (STEPS_PER_REV * 3 / 4)
 
-// Motor 2 drives its needle through a gearbox with 3–4 mBar of lost motion.
-// setValue() undershoots the target by this many steps and then comes back up,
-// so the slack is always taken up in the increasing direction — the direction
-// the gauge is calibrated in.  Only needs to EXCEED the real backlash, so it is
-// not a precision figure: at the factory gain (3072 steps / 80 hPa =
-// 38.4 steps/hPa) 3–4 mBar is 115–154 steps, and 250 leaves ~2.5 hPa of margin.
-// Set to 0 to disable compensation for a direct-drive gauge (motor 1).
+// ── Gearbox backlash compensation ─────────────────────────────────────
+// Both needles are driven through gear trains with lost motion, so the same
+// commanded step count leaves a needle in a different place depending on which
+// way it was last driven.  setValue() undershoots its target by this many steps
+// and then comes back up, making every final approach increasing — the direction
+// the calibration wizard is operated in.
+//
+// The figure only has to EXCEED the real backlash, so it is not a precision
+// constant.  Too large only costs travel time and a more visible dip; too small
+// leaves a residual error.  Set to 0 to disable compensation entirely.
+//
+// Motor 2 (pressure) has an external reduction stage on top of the 28BYJ-48's
+// internal 1:64 gearbox.  Measured lost motion is 3–4 mBar; at the factory gain
+// (3072 steps / 80 hPa = 38.4 steps/hPa) that is 115–154 steps, so 250 leaves
+// ~2.5 hPa of margin.
 #define PRES_BACKLASH_STEPS  250
+
+// Motor 1 (wind direction) is direct from the internal gearbox — no external
+// stage — so its backlash is a subset of motor 2's and smaller in step terms.
+// 120 steps is 10.5° at the factory gain (4096 steps / 360° = 11.4 steps/°).
+// This is an unverified upper-bound estimate: measure it on the dial (drive the
+// needle up to a mark with /calib, then nudge down 10 steps at a time and count
+// until it first moves) and trim this down to just above the result.
+#define WDIR_BACKLASH_STEPS  120
 
 // ── Firmware identity ────────────────────────────────────────────────────────
 #define FW_VERSION  "1.1"

@@ -31,17 +31,18 @@ const char CSS[] PROGMEM =
     ".warn{background:#fff8e1;border:1px solid #e6c200;border-radius:4px;"
          "padding:8px 10px;margin:8px 0;font-size:.85em;color:#5a4a00}";
 
-// Shown in both wizard states. The pressure gauge is geared and has 3–4 mBar of
-// lost motion, so the needle sits in a different place depending on which way it
-// was last driven. setValue() always finishes an increasing move; the operator
-// has to do the same when calibrating, or the stored coefficients describe a
-// slack state the firmware never reproduces.
+// Shown in both wizard states. Both gauges run through gear trains with lost
+// motion, so a needle sits in a different place depending on which way it was
+// last driven. setValue() always finishes an increasing move; the operator has
+// to do the same when calibrating, or the stored coefficients describe a slack
+// state the firmware never reproduces.
 const char APPROACH_NOTE[] PROGMEM =
     "<div class='warn'><b>Approach every mark from below.</b> Finish each "
     "adjustment with the <b>+</b> buttons — if you overshoot, back off well past "
-    "the mark and come up again. The pressure gauge has ~3&ndash;4 mBar of gear "
-    "backlash and the firmware always drives it upwards onto its target, so the "
-    "calibration is only valid if it was taken the same way.</div>";
+    "the mark and come up again. Both gauges have gearbox backlash (~3&ndash;4 mBar "
+    "on the barometer, less on the compass) and the firmware always drives a "
+    "needle upwards onto its target, so a calibration is only valid if it was "
+    "taken the same way.</div>";
 
 constexpr float SPEED_FS_MIN_MV = 50.0f;
 constexpr float SPEED_FS_MAX_MV = 3300.0f;

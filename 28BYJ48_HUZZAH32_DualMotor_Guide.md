@@ -146,7 +146,7 @@ display (GC9A01, 240×240) shows weather and clock data. All control signals run
 | Display library | DIYables_TFT_Round (Adafruit GFX compatible) |
 | Wind speed meter | Analog panel meter, 0–30 kn, driven by 12-bit LEDC PWM (GPIO22) |
 | Steps / rev (half-step) | 4096 — output shaft, internal 1:64 gear included |
-| Gear ratio | 1:64 internal (motor only — no external reduction) |
+| Gear ratio | 1:64 internal per motor; motor 2 (pressure) adds an external reduction stage |
 | Motor supply | 5V external — NOT the 3.3V board rail |
 
 ---
@@ -773,20 +773,26 @@ clamped to it:
   needle anywhere on the dial, past full scale and across several revolutions.
 - `_pos` free-runs and is persisted as-is. It is never wrapped or clamped.
 
-**Gearbox backlash (motor 2)**
+**Gearbox backlash (both motors)**
 
-The pressure needle is driven through a gearbox with **3–4 mBar of lost motion**.
-Where the needle physically sits therefore depends on which direction it was
-last driven — the same commanded step count puts it in two different places
-depending on history. At the factory gain (38.4 steps/hPa) that dead zone is
-115–154 steps, and a 1 hPa weather change is only 38 steps, so without
-compensation small pressure movements would not move the needle at all and
-larger ones would arrive late.
+Every 28BYJ-48 has an internal 1:64 reduction gearbox, so **both** needles are
+driven through a gear train with lost motion. Where a needle physically sits
+therefore depends on which direction it was last driven — the same commanded
+step count puts it in two different places depending on history.
+
+| Gauge | Gear train | Lost motion | Compensation |
+|---|---|---|---|
+| Motor 2 — pressure | internal 1:64 **plus an external reduction stage** | 3–4 mBar = 115–154 steps at 38.4 steps/hPa | `PRES_BACKLASH_STEPS` = 250 (≈ 6.5 hPa) |
+| Motor 1 — wind direction | internal 1:64 only | subset of motor 2's, so fewer steps — **not yet measured** | `WDIR_BACKLASH_STEPS` = 120 (≈ 10.5°) |
+
+The pressure gauge is the worse case: a 1 hPa weather change is only 38 steps,
+well inside its dead zone, so without compensation small pressure movements
+would not move the needle at all and larger ones would arrive late.
 
 `StepperGauge` handles this by **always approaching the target from below**.
-`setValue()` drives to `target − PRES_BACKLASH_STEPS`, then comes back up onto
-the target, so the final leg is always increasing and the slack is always taken
-up the same way:
+`setValue()` drives to `target − backlashSteps`, then comes back up onto the
+target, so the final leg is always increasing and the slack is always taken up
+the same way:
 
 ```cpp
 void StepperGauge::approachFromBelow(int target, int stepDelay) {
@@ -798,8 +804,8 @@ void StepperGauge::approachFromBelow(int target, int stepDelay) {
 
 Three properties of this scheme are worth understanding:
 
-- **`PRES_BACKLASH_STEPS` only has to exceed the real backlash.** It is not a
-  precision figure — 250 steps against a measured 115–154 leaves ample margin.
+- **The constant only has to exceed the real backlash.** It is not a precision
+  figure — 250 steps against motor 2's measured 115–154 leaves ample margin.
   This is why undershoot is preferred over a model-based directional offset,
   which would need an accurate backlash figure that in practice varies with
   angle, load, temperature and wear.
@@ -818,9 +824,22 @@ Three properties of this scheme are worth understanding:
 
 Cost is ~500 extra steps (≈ 2.5 s at 5 ms/step) per fetch, once every 10 minutes.
 
-Motor 1 is direct drive and passes `backlashSteps = 0`, which disables all of the
-above and restores a straight move to target. Set the parameter non-zero on any
-gauge that later acquires a reduction stage.
+Passing `backlashSteps = 0` disables all of the above and restores a straight
+move to target — correct only for a genuinely direct-drive needle, which neither
+of these is.
+
+`WDIR_BACKLASH_STEPS` is an **unverified upper-bound estimate**. To measure the
+real figure: open `/calib`, start the wind-direction wizard, drive the needle up
+to a dial mark with the **+** buttons, then nudge **−10** repeatedly and count
+the steps until the needle first visibly moves. Trim the constant to just above
+that. Too large only costs travel time and a more visible dip, so erring high is
+safe.
+
+The compensation composes with circular shortest-arc movement at no extra cost:
+`setValue()` resolves the shortest arc into an absolute target *first*, then
+undershoots that. A compass needle never takes the long way round to get its
+approach direction right — it dips past the target and comes back, the same as
+the barometer.
 
 Motor 1 is constructed with `circular = true`. A circular gauge takes the
 **shortest arc** to its target: current and target positions are reduced modulo

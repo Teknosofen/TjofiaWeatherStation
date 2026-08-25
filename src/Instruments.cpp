@@ -41,8 +41,9 @@ void StepperGauge::moveTo(int pos, int stepDelay) {
 // Runs unconditionally, including when the needle is already on target and when
 // the target is above it.  Two reasons: nothing outside setValue() can then leave
 // the gear train in the wrong state (the startup self-test and the wizard's
-// nudge() both end wherever they happen to end), and the dip-and-return is a
-// visible sign of life on a barometer whose reading can sit unchanged for hours.
+// nudge() both end wherever they happen to end, and the slack state after a power
+// cycle is unknowable), and the dip-and-return is a visible sign of life on a
+// gauge like the barometer whose reading can sit unchanged for hours.
 void StepperGauge::approachFromBelow(int target, int stepDelay) {
     moveTo(target - _backlashSteps, stepDelay);
     moveTo(target, stepDelay);              // final leg always increasing
@@ -106,11 +107,12 @@ void StepperGauge::resetCalibration() {
 // ── Instruments ──────────────────────────────────────────────────────────────
 
 Instruments::Instruments()
-    // Wind direction: circular dial, pins reversed to match the dial, direct
-    // drive so no backlash compensation.
+    // Wind direction: circular dial, pins reversed to match the dial.  Driven
+    // straight off the 28BYJ-48's internal 1:64 gearbox, which has lost motion
+    // of its own, so it is compensated too — just by less than motor 2.
     : _wdir(MOTOR1_P4, MOTOR1_P3, MOTOR1_P2, MOTOR1_P1,
-            WDIR_MIN_DEG, WDIR_MAX_DEG, WDIR_MAX_STEPS, true, 0),
-      // Pressure: linear dial through a gearbox — approach every target from below.
+            WDIR_MIN_DEG, WDIR_MAX_DEG, WDIR_MAX_STEPS, true, WDIR_BACKLASH_STEPS),
+      // Pressure: linear dial, internal gearbox plus an external reduction stage.
       _pres(MOTOR2_P1, MOTOR2_P2, MOTOR2_P3, MOTOR2_P4,
             PRES_MIN_HPA, PRES_MAX_HPA, PRES_MAX_STEPS, false, PRES_BACKLASH_STEPS)
 {}
